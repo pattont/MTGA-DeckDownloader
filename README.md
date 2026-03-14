@@ -1,17 +1,46 @@
 # MTGA Deck Downloader
 
-Python console app scaffold for finding MTG Arena decks from multiple websites.
+Console app for finding playable Magic The Gathering Arena decklists from multiple sources for import to MTG Arena.
 
-## Current status
+## What It Does
 
-- Rich UI with a menu of deck source sites.
-- Provider architecture for modular source additions.
-- Format filtering (`Bo1`, `Bo3`, or `Any`) on source endpoints.
-- Starter providers for:
-  - `magic.gg`
-  - `mtga.untapped.gg`
+- Loads providers dynamically (modular source architecture).
+- Lets you choose site + format (`Bo1`, `Bo3`, or `Any`).
+- Shows ranked results in a Rich terminal UI.
+- Opens deck details and displays Arena import text when available.
 
-## Run
+## Current Sources
+
+### `magic.gg`
+
+- Scrapes `https://magic.gg/decklists` and article decklist entries.
+- Pulls event decklists, event metadata, and Arena deck text.
+- Attempts to detect format from event/article context.
+
+### `mtga.untapped.gg`
+
+- Uses Untapped public endpoints for archetype + meta data.
+- Falls back to API deck rows if archetype page variant rows are empty.
+- Decodes Untapped deckstrings into Arena import text in-app.
+
+Untapped flow in UI:
+
+1. Select an archetype from the results table.
+2. Select one of that archetype's variant decks.
+3. View details and copy the Arena text.
+
+## Requirements
+
+- Python 3.10+
+- Terminal that supports ANSI colors/controls (recommended for Rich UI)
+
+Dependencies are listed in `requirements.txt`:
+
+- `rich`
+- `requests`
+- `beautifulsoup4`
+
+## Quick Start
 
 ```bash
 python3 -m venv .venv
@@ -20,15 +49,62 @@ pip install -r requirements.txt
 python app.py
 ```
 
-## Add a new site provider
+## Usage Controls
 
-1. Create a new file in `mtga_deck_downloader/providers/`.
-2. Add a class that extends `DeckProvider`.
-3. Expose `PROVIDER_CLASS = YourProviderClass` at the bottom of the file.
-4. Restart the app; the provider is auto-discovered.
+Main results screen:
 
-## Next implementation steps
+- Enter a number to drill into the selected item.
+- `f` to change format.
+- `s` to change site.
+- `q` to quit.
 
-- Add scraping/fetch logic per provider to list actual decks.
-- Add deck selection and full decklist export to clipboard.
-- Evaluate browser automation for dynamic pages (`Playwright` is usually a better Python choice than Puppeteer).
+Variant screen (Untapped):
+
+- Enter a number for deck details.
+- `b` to go back to archetypes.
+- `f` / `s` / `q` as above.
+
+## Project Layout
+
+```text
+app.py
+mtga_deck_downloader/
+  providers/
+    base.py
+    magic_gg.py
+    untapped.py
+    registry.py
+  scrapers/
+    magic_gg.py
+    untapped.py
+    untapped_deckstring.py
+  ui.py
+  models.py
+```
+
+## Add a New Source Provider
+
+1. Create a new module in `mtga_deck_downloader/providers/`.
+2. Subclass `DeckProvider`.
+3. Implement:
+   - `sources`
+   - `fetch_decks(...)`
+   - optionally `fetch_deck_variants(...)` for multi-step flows
+4. Export `PROVIDER_CLASS = YourProviderClass`.
+5. Restart the app (providers are auto-discovered by `registry.py`).
+
+## Known Limitations
+
+- Untapped Bo3 win-rate fields may be unavailable in public payloads.
+- External site markup/API contracts can change and break scraping.
+- Clipboard integration is not implemented yet (copy is manual from console).
+
+## Next Steps
+
+- Add clipboard copy support for deck text.
+- Add refresh/pagination and optional rank/time-range filters.
+- Add tests around parser and provider behavior.
+
+---
+
+This project is not affiliated with Wizards of the Coast.

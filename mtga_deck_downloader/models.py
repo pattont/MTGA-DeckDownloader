@@ -27,3 +27,17 @@ class DeckSource:
         if selected_format is MatchFormat.ANY:
             return True
         return selected_format in self.formats
+
+
+@dataclass(frozen=True)
+class DeckEntry:
+    name: str
+    source_site: str
+    source_url: str
+    format_label: str
+    matches: int | None = None
+    win_rate: float | None = None
+    event_name: str | None = None
+    event_date: str | None = None
+    deck_text: str | None = None
+    notes: str | None = None

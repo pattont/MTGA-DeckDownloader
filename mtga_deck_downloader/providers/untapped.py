@@ -1,12 +1,16 @@
-from mtga_deck_downloader.models import DeckSource, MatchFormat
+from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.providers.base import DeckProvider
+from mtga_deck_downloader.scrapers.untapped import UntappedScraper
 
 
 class UntappedProvider(DeckProvider):
     key = "untapped"
     display_name = "mtga.untapped.gg"
-    description = "Arena meta decks with win-rate data."
+    description = "Arena archetypes with win-rate data and variant decklists."
     homepage = "https://mtga.untapped.gg/constructed/standard/meta"
+
+    def __init__(self) -> None:
+        self._scraper = UntappedScraper()
 
     @property
     def sources(self) -> list[DeckSource]:
@@ -24,6 +28,23 @@ class UntappedProvider(DeckProvider):
                 formats=(MatchFormat.BO3,),
             ),
         ]
+
+    def fetch_decks(self, selected_format: MatchFormat, limit: int = 50) -> list[DeckEntry]:
+        return self._scraper.fetch_decks(selected_format=selected_format, limit=limit)
+
+    def fetch_deck_variants(
+        self,
+        deck: DeckEntry,
+        selected_format: MatchFormat,
+        limit: int = 50,
+    ) -> list[DeckEntry] | None:
+        if "/archetypes/" not in deck.source_url:
+            return None
+        return self._scraper.fetch_archetype_variants(
+            archetype_entry=deck,
+            selected_format=selected_format,
+            limit=limit,
+        )
 
 
 PROVIDER_CLASS = UntappedProvider
