@@ -6,8 +6,10 @@ Console app for finding playable Magic The Gathering Arena decklists from multip
 
 - Loads providers dynamically (modular source architecture).
 - Lets you choose site + format (`Bo1`, `Bo3`, or `Any`).
+- Lets you optionally choose a specific source endpoint/tab when a site exposes multiple feeds.
 - Shows ranked results in a Rich terminal UI.
 - Opens deck details and displays Arena import text when available.
+- Uses lazy deck-text loading for heavy sources so list and variant screens stay fast.
 
 ## Current Sources
 
@@ -29,6 +31,16 @@ Untapped flow in UI:
 2. Select one of that archetype's variant decks.
 3. View details and copy the Arena text.
 
+### `aetherhub.com`
+
+- Scrapes all requested Standard tabs:
+  - Tournament: `https://aetherhub.com/Events/Standard/`
+  - Tournament Meta: `https://aetherhub.com/Metagame/Standard-Events/`
+  - MTGA BO1 Meta: `https://aetherhub.com/Metagame/Standard-BO1/`
+  - MTGA BO3 Meta: `https://aetherhub.com/Metagame/Standard-BO3/`
+- Parses tournament event names and normalizes event dates to U.S. format (`MM/DD/YYYY`).
+- Pulls direct Arena export text through Aetherhub's deck export endpoint.
+
 ## Requirements
 
 - Python 3.10+
@@ -39,6 +51,7 @@ Dependencies are listed in `requirements.txt`:
 - `rich`
 - `requests`
 - `beautifulsoup4`
+- `cloudscraper`
 
 ## Quick Start
 
@@ -58,6 +71,12 @@ Main results screen:
 - `s` to change site.
 - `q` to quit.
 
+Source endpoint screen (multi-feed sites):
+
+- Enter endpoint number to fetch only that tab/feed.
+- `a` to fetch all endpoints matching the selected format.
+- `b` to go back to format selection.
+
 Variant screen (Untapped):
 
 - Enter a number for deck details.
@@ -70,11 +89,13 @@ Variant screen (Untapped):
 app.py
 mtga_deck_downloader/
   providers/
+    aetherhub.py
     base.py
     magic_gg.py
     untapped.py
     registry.py
   scrapers/
+    aetherhub.py
     magic_gg.py
     untapped.py
     untapped_deckstring.py

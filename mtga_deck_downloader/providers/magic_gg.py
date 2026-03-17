@@ -23,7 +23,14 @@ class MagicGGProvider(DeckProvider):
             )
         ]
 
-    def fetch_decks(self, selected_format: MatchFormat, limit: int = 50) -> list[DeckEntry]:
+    def fetch_decks(
+        self,
+        selected_format: MatchFormat,
+        limit: int = 50,
+        source: DeckSource | None = None,
+    ) -> list[DeckEntry]:
+        if source is not None and source.url != "https://magic.gg/decklists":
+            return []
         return self._scraper.fetch_decks(selected_format=selected_format, limit=limit)
 
 

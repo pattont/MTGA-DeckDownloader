@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.providers.base import DeckProvider
 from mtga_deck_downloader.scrapers.untapped import UntappedScraper
@@ -29,7 +31,15 @@ class UntappedProvider(DeckProvider):
             ),
         ]
 
-    def fetch_decks(self, selected_format: MatchFormat, limit: int = 50) -> list[DeckEntry]:
+    def fetch_decks(
+        self,
+        selected_format: MatchFormat,
+        limit: int = 50,
+        source: DeckSource | None = None,
+    ) -> list[DeckEntry]:
+        if source is not None:
+            forced_format = MatchFormat.BO3 if "wincon=bo3" in source.url else MatchFormat.BO1
+            return self._scraper.fetch_decks(selected_format=forced_format, limit=limit)
         return self._scraper.fetch_decks(selected_format=selected_format, limit=limit)
 
     def fetch_deck_variants(
@@ -45,6 +55,16 @@ class UntappedProvider(DeckProvider):
             selected_format=selected_format,
             limit=limit,
         )
+
+    def hydrate_deck(self, deck: DeckEntry) -> DeckEntry:
+        if deck.source_site != "mtga.untapped.gg" or deck.deck_text:
+            return deck
+        if "/constructed/standard/decks/" not in deck.source_url:
+            return deck
+        deck_text = self._scraper.decode_deck_from_url(deck.source_url)
+        if deck_text is None:
+            return deck
+        return replace(deck, deck_text=deck_text)
 
 
 PROVIDER_CLASS = UntappedProvider

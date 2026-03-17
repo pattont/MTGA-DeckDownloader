@@ -59,8 +59,13 @@ class MagicGGScraper:
 
     def __init__(self) -> None:
         self._session = create_session()
+        self._results_cache: dict[tuple[str, int], list[DeckEntry]] = {}
 
     def fetch_decks(self, selected_format: MatchFormat, limit: int = 50) -> list[DeckEntry]:
+        cache_key = (selected_format.value, limit)
+        if cache_key in self._results_cache:
+            return list(self._results_cache[cache_key])
+
         index_html = self._get_text(self.INDEX_URL)
         article_urls = self._extract_article_urls(index_html)
         if not article_urls:
@@ -68,6 +73,9 @@ class MagicGGScraper:
 
         decks: list[DeckEntry] = []
         for article_url in article_urls[: self.MAX_ARTICLES_TO_SCAN]:
+            hinted = self._hint_format_from_article_url(article_url)
+            if selected_format is not MatchFormat.ANY and hinted is not None and hinted is not selected_format:
+                continue
             article_html = self._get_text(article_url)
             article_decks = self._extract_article_decks(
                 article_html=article_html,
@@ -78,7 +86,9 @@ class MagicGGScraper:
             if len(decks) >= limit:
                 break
 
-        return decks[:limit]
+        final = decks[:limit]
+        self._results_cache[cache_key] = list(final)
+        return final
 
     def _get_text(self, url: str) -> str:
         response = self._session.get(url, timeout=20)
@@ -263,6 +273,30 @@ class MagicGGScraper:
         ):
             return MatchFormat.BO3
         return MatchFormat.ANY
+
+    @staticmethod
+    def _hint_format_from_article_url(article_url: str) -> MatchFormat | None:
+        lowered = (article_url or "").lower()
+        if not lowered:
+            return None
+        if "traditional" in lowered or "best-of-3" in lowered or "bo3" in lowered:
+            return MatchFormat.BO3
+        if "bo1" in lowered or "best-of-1" in lowered:
+            return MatchFormat.BO1
+        if "standard-ranked-decklists" in lowered and "traditional" not in lowered:
+            return MatchFormat.BO1
+        if any(
+            token in lowered
+            for token in (
+                "pro-tour",
+                "regional-championship",
+                "championship",
+                "spotlight",
+                "top-",
+            )
+        ):
+            return MatchFormat.BO3
+        return None
 
     @staticmethod
     def _get_section_lines(deck_tag: BeautifulSoup, section_name: str) -> list[str]:

@@ -26,7 +26,10 @@ class DeckProvider(ABC):
         return formats
 
     def fetch_decks(
-        self, selected_format: MatchFormat, limit: int = 50
+        self,
+        selected_format: MatchFormat,
+        limit: int = 50,
+        source: DeckSource | None = None,
     ) -> list[DeckEntry]:
         raise NotImplementedError("Providers must implement deck fetching.")
 
@@ -37,3 +40,6 @@ class DeckProvider(ABC):
         limit: int = 50,
     ) -> list[DeckEntry] | None:
         return None
+
+    def hydrate_deck(self, deck: DeckEntry) -> DeckEntry:
+        return deck

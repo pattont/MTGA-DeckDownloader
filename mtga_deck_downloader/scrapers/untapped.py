@@ -29,6 +29,7 @@ class UntappedScraper:
         self._session = create_session()
         self._session.headers.update({"Accept": "application/json"})
         self._deckstring_decoder = UntappedDeckstringDecoder(self._session)
+        self._deck_text_cache: dict[str, str | None] = {}
 
     def fetch_decks(self, selected_format: MatchFormat, limit: int = 50) -> list[DeckEntry]:
         if selected_format is MatchFormat.BO1:
@@ -82,13 +83,11 @@ class UntappedScraper:
 
             matches, wins = self._aggregate_ranked_stats(row.get("rs") or {})
             win_rate = (wins / matches) * 100 if wins is not None and matches > 0 else None
-            deck_text = self._deckstring_decoder.decode_to_arena_text(deckstring)
             deck_url = self._build_deck_url(archetype_id, slug, deckstring, match_format)
-            name = self._build_variant_name(archetype_entry.name, deck_text, deckstring, idx)
+            name = self._build_variant_name(archetype_entry.name, deckstring, idx)
 
             notes_parts: list[str] = []
-            if deck_text is None:
-                notes_parts.append("Deck text was not decoded from this Untapped deckstring payload.")
+            notes_parts.append("Deck text is decoded on demand when opening details.")
             if win_rate is None:
                 notes_parts.append(
                     f"Win-rate is not exposed for {format_label} in this payload."
@@ -103,7 +102,7 @@ class UntappedScraper:
                     format_label=format_label,
                     matches=matches if matches > 0 else None,
                     win_rate=win_rate,
-                    deck_text=deck_text,
+                    deck_text=None,
                     notes=notes,
                 )
             )
@@ -392,17 +391,23 @@ class UntappedScraper:
             return MatchFormat.BO3
         return MatchFormat.BO1
 
-    def _build_variant_name(
-        self,
-        archetype_name: str,
-        deck_text: str | None,
-        deckstring: str,
-        index: int,
-    ) -> str:
-        signature = self._build_deck_signature(deck_text)
-        if signature:
-            return f"{archetype_name} - {signature}"
+    def _build_variant_name(self, archetype_name: str, deckstring: str, index: int) -> str:
         return f"{archetype_name} Deck {index} [{deckstring[:8]}]"
+
+    def decode_deckstring(self, deckstring: str) -> str | None:
+        if not deckstring:
+            return None
+        if deckstring in self._deck_text_cache:
+            return self._deck_text_cache[deckstring]
+        text = self._deckstring_decoder.decode_to_arena_text(deckstring)
+        self._deck_text_cache[deckstring] = text
+        return text
+
+    def decode_deck_from_url(self, deck_url: str) -> str | None:
+        match = re.search(r"/decks/\d+/[^/]+/([^/?#]+)", deck_url)
+        if not match:
+            return None
+        return self.decode_deckstring(match.group(1))
 
     @staticmethod
     def _build_deck_signature(deck_text: str | None) -> str | None:
