@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
@@ -12,7 +14,10 @@ from rich.text import Text
 
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.providers.base import DeckProvider
-from mtga_deck_downloader.providers.registry import load_providers
+from mtga_deck_downloader.providers.registry import LAST_PROVIDER_ERRORS, load_providers
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
 
 
 def _clear_screen(console: Console) -> None:
@@ -37,7 +42,7 @@ def _render_site_header(console: Console) -> None:
 
     subtitle = Text("Select a decklist source website to begin.", style="white")
     scope = Text(
-        "Currently supports Standard BO1 and BO3 decklists - others coming soon.",
+        "Currently supports Standard BO1/BO3 sources and configurable Moxfield creators.",
         style="bold yellow",
     )
     console.print(
@@ -48,11 +53,68 @@ def _render_site_header(console: Console) -> None:
     )
 
 
+def _missing_runtime_modules() -> list[str]:
+    required = {
+        "requests": "requests",
+        "bs4": "beautifulsoup4",
+        "cloudscraper": "cloudscraper",
+    }
+    missing: list[str] = []
+    for module_name, package_name in required.items():
+        if importlib.util.find_spec(module_name) is None:
+            missing.append(package_name)
+    return missing
+
+
+def _render_dependency_error(console: Console, missing_packages: list[str]) -> None:
+    install_cmd = f"{sys.executable} -m pip install -r {REQUIREMENTS_PATH}"
+    lines = [
+        "[bold red]Missing Python dependencies for this interpreter.[/bold red]",
+        "",
+        f"[bold]Python:[/bold] {sys.executable}",
+        f"[bold]Missing:[/bold] {', '.join(missing_packages)}",
+        "",
+        "[bold]Fix:[/bold]",
+        install_cmd,
+    ]
+
+    venv_python = REPO_ROOT / ".venv" / "bin" / "python"
+    if venv_python.exists() and Path(sys.executable) != venv_python:
+        lines.extend(
+            [
+                "",
+                "[bold]Repo virtualenv:[/bold]",
+                f"{venv_python} {REPO_ROOT / 'app.py'}",
+            ]
+        )
+
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="Missing Dependencies",
+            border_style="red",
+        )
+    )
+
+
 def run_app() -> None:
     console = Console()
+    missing_packages = _missing_runtime_modules()
+    if missing_packages:
+        _render_dependency_error(console, missing_packages)
+        return
+
     providers = load_providers()
 
     if not providers:
+        if LAST_PROVIDER_ERRORS:
+            console.print(
+                Panel(
+                    "\n".join(LAST_PROVIDER_ERRORS),
+                    title="Provider Load Errors",
+                    border_style="yellow",
+                )
+            )
         console.print("[bold red]No providers found. Add provider modules first.[/bold red]")
         return
 
@@ -71,6 +133,8 @@ def run_app() -> None:
             selected_source = _pick_source(console, provider, selected_format)
             if selected_source == "b":
                 _clear_screen(console)
+                if provider.supported_formats == {MatchFormat.ANY}:
+                    break
                 continue
 
             decks = _fetch_decks(
@@ -141,6 +205,7 @@ def _browse_decks(
     selected_source: DeckSource | None = None,
 ) -> str:
     is_untapped = provider.key == "untapped"
+    change_label = "creator" if provider.supported_formats == {MatchFormat.ANY} else "format"
     while True:
         _show_deck_table(
             console,
@@ -153,9 +218,9 @@ def _browse_decks(
             name_column_label="Archetype" if is_untapped else "Deck",
         )
         prompt = (
-            "\n[bold cyan]Archetype # for variants, f=format, s=site, q=quit[/bold cyan]"
+            f"\n[bold cyan]Archetype # for variants, f={change_label}, s=site, q=quit[/bold cyan]"
             if is_untapped
-            else "\n[bold cyan]Deck # for details, f=format, s=site, q=quit[/bold cyan]"
+            else f"\n[bold cyan]Deck # for details, f={change_label}, s=site, q=quit[/bold cyan]"
         )
         raw = Prompt.ask(
             prompt,
@@ -272,6 +337,7 @@ def _browse_variants(
     variants: list[DeckEntry],
     selected_source: DeckSource | None = None,
 ) -> str:
+    change_label = "creator" if provider.supported_formats == {MatchFormat.ANY} else "format"
     while True:
         _show_deck_table(
             console=console,
@@ -284,7 +350,7 @@ def _browse_variants(
             name_column_label="Deck",
         )
         raw = Prompt.ask(
-            "\n[bold cyan]Deck # for details, b=back, f=format, s=site, q=quit[/bold cyan]",
+            f"\n[bold cyan]Deck # for details, b=back, f={change_label}, s=site, q=quit[/bold cyan]",
             default="b",
             show_choices=False,
         ).strip()
@@ -476,6 +542,9 @@ def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvi
 
 
 def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | None:
+    if provider.supported_formats == {MatchFormat.ANY}:
+        return MatchFormat.ANY
+
     while True:
         _clear_screen(console)
         console.print(
@@ -512,12 +581,13 @@ def _pick_source(
     console: Console, provider: DeckProvider, selected_format: MatchFormat
 ) -> DeckSource | str | None:
     sources = provider.list_sources(selected_format)
+    is_creator_list = provider.supported_formats == {MatchFormat.ANY}
     _clear_screen(console)
     console.print(
         Panel(
             f"[bold green]{provider.display_name}[/bold green]\n"
             f"Format filter: [bold cyan]{selected_format.label}[/bold cyan]",
-            title="Deck Source Endpoints",
+            title="Configured Creators" if is_creator_list else "Deck Source Endpoints",
             border_style="cyan",
         )
     )
@@ -542,7 +612,11 @@ def _pick_source(
 
     while True:
         raw = Prompt.ask(
-            "\n[bold cyan]Select endpoint #, a=all matching, b=back[/bold cyan]",
+            (
+                "\n[bold cyan]Select creator #, a=all configured creators, b=back[/bold cyan]"
+                if is_creator_list
+                else "\n[bold cyan]Select endpoint #, a=all matching, b=back[/bold cyan]"
+            ),
             default="a",
             show_choices=False,
         ).strip()
@@ -555,4 +629,4 @@ def _pick_source(
             selection = int(raw)
             if 1 <= selection <= len(sources):
                 return sources[selection - 1]
-        console.print("[yellow]Invalid selection. Enter a source number, a, or b.[/yellow]")
+        console.print("[yellow]Invalid selection. Enter a number, a, or b.[/yellow]")

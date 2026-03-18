@@ -41,6 +41,12 @@ Untapped flow in UI:
 - Parses tournament event names and normalizes event dates to U.S. format (`MM/DD/YYYY`).
 - Pulls direct Arena export text through Aetherhub's deck export endpoint.
 
+### `moxfield.com`
+
+- Loads creator profiles from `config.json` via the `MoxfieldNames` array.
+- Uses Moxfield public APIs to fetch the first 15 public decks from each configured creator.
+- Opens full deck text from the public deck API when you select a deck.
+
 ## Requirements
 
 - Python 3.10+
@@ -52,6 +58,21 @@ Dependencies are listed in `requirements.txt`:
 - `requests`
 - `beautifulsoup4`
 - `cloudscraper`
+
+## Config
+
+The repo root contains `config.json`. Moxfield creator profiles are configured here:
+
+```json
+{
+  "MoxfieldNames": [
+    "Ashlizzlle",
+    "Swayzemtg",
+    "covertgoblue",
+    "carlomtg"
+  ]
+}
+```
 
 ## Quick Start
 
