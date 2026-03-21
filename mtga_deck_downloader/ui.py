@@ -97,6 +97,11 @@ def _render_dependency_error(console: Console, missing_packages: list[str]) -> N
     )
 
 
+def _continue_or_quit(console: Console, message: str) -> bool:
+    raw = console.input(f"\n[dim]{message}[/dim] ").strip().lower()
+    return raw == "q"
+
+
 def run_app() -> None:
     console = Console()
     missing_packages = _missing_runtime_modules()
@@ -126,11 +131,19 @@ def run_app() -> None:
 
         while True:
             selected_format = _pick_format(console, provider)
+            if selected_format == "q":
+                _clear_screen(console)
+                console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
+                return
             if selected_format is None:
                 _clear_screen(console)
                 break
 
             selected_source = _pick_source(console, provider, selected_format)
+            if selected_source == "q":
+                _clear_screen(console)
+                console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
+                return
             if selected_source == "b":
                 _clear_screen(console)
                 if provider.supported_formats == {MatchFormat.ANY}:
@@ -145,7 +158,10 @@ def run_app() -> None:
                 selected_source=selected_source,
             )
             if decks is None:
-                console.input("\n[dim]Press Enter to continue[/dim]")
+                if _continue_or_quit(console, "Press Enter to continue or q to quit"):
+                    _clear_screen(console)
+                    console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
+                    return
                 continue
 
             action = _browse_decks(
@@ -246,7 +262,8 @@ def _browse_decks(
                         )
                 except Exception as exc:
                     console.print(f"[red]Failed to load variant decks: {exc}[/red]")
-                    console.input("\n[dim]Press Enter to return to results[/dim]")
+                    if _continue_or_quit(console, "Press Enter to return to results or q to quit"):
+                        return "q"
                     continue
 
                 if variants:
@@ -263,6 +280,8 @@ def _browse_decks(
                     continue
 
                 detailed_deck = _show_deck_detail(console, provider, selected)
+                if detailed_deck == "q":
+                    return "q"
                 decks[index - 1] = detailed_deck
                 continue
         console.print("[yellow]Invalid input. Enter a deck number, f, s, or q.[/yellow]")
@@ -361,12 +380,14 @@ def _browse_variants(
             index = int(raw)
             if 1 <= index <= len(variants):
                 detailed_deck = _show_deck_detail(console, provider, variants[index - 1])
+                if detailed_deck == "q":
+                    return "q"
                 variants[index - 1] = detailed_deck
                 continue
         console.print("[yellow]Invalid input. Enter a deck number, b, f, s, or q.[/yellow]")
 
 
-def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry) -> DeckEntry:
+def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry) -> DeckEntry | str:
     hydrated = deck
     if hydrated.deck_text is None:
         try:
@@ -420,14 +441,16 @@ def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry)
     while True:
         raw = (
             console.input(
-                "\n[bold cyan]Enter=go back to list (Enter)[/bold cyan]: "
+                "\n[bold cyan]Enter=go back to list (Enter), q=quit[/bold cyan]: "
             )
             .strip()
             .lower()
         )
         if raw == "":
             break
-        console.print("[yellow]Invalid input. Press Enter to go back.[/yellow]")
+        if raw == "q":
+            return "q"
+        console.print("[yellow]Invalid input. Press Enter to go back or q to quit.[/yellow]")
     return hydrated
 
 
@@ -535,7 +558,7 @@ def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvi
         console.print("[yellow]Invalid selection. Try again.[/yellow]")
 
 
-def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | None:
+def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | str | None:
     if provider.supported_formats == {MatchFormat.ANY}:
         return MatchFormat.ANY
 
@@ -559,7 +582,9 @@ def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | None
         table.add_row("3", MatchFormat.BO3.label)
         console.print(table)
 
-        raw = Prompt.ask("\n[bold cyan]Select format (or b to go back)[/bold cyan]")
+        raw = Prompt.ask("\n[bold cyan]Select format (or b to go back, q to quit)[/bold cyan]")
+        if raw.lower() == "q":
+            return "q"
         if raw.lower() == "b":
             return None
         if raw == "1":
@@ -589,7 +614,6 @@ def _pick_source(
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("#", justify="right", style="bold")
     table.add_column("Name", style="bold")
-    table.add_column("Description")
     table.add_column("URL", overflow="fold")
 
     if not sources:
@@ -597,7 +621,7 @@ def _pick_source(
         return "b"
 
     for idx, source in enumerate(sources, start=1):
-        table.add_row(str(idx), source.name, source.description, source.url)
+        table.add_row(str(idx), source.name, source.url)
     console.print(table)
 
     if len(sources) == 1:
@@ -607,14 +631,16 @@ def _pick_source(
     while True:
         raw = Prompt.ask(
             (
-                "\n[bold cyan]Select creator #, a=all configured creators, b=back[/bold cyan]"
+                "\n[bold cyan]Select creator #, a=all configured creators, b=back, q=quit[/bold cyan]"
                 if is_creator_list
-                else "\n[bold cyan]Select endpoint #, a=all matching, b=back[/bold cyan]"
+                else "\n[bold cyan]Select endpoint #, a=all matching, b=back, q=quit[/bold cyan]"
             ),
             default="a",
             show_choices=False,
         ).strip()
         lowered = raw.lower()
+        if lowered == "q":
+            return "q"
         if lowered == "b":
             return "b"
         if lowered == "a":
