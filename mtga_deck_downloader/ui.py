@@ -403,6 +403,15 @@ def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry)
     if formatted_deck_text:
         console.print("\n[bold cyan]Arena Import Text[/bold cyan]\n")
         console.print(formatted_deck_text, soft_wrap=True)
+        copied, error = _copy_to_clipboard(formatted_deck_text)
+        if copied:
+            console.print("\n[bold green]Decklist copied to clipboard automatically.[/bold green]")
+        else:
+            console.print(
+                "\n[yellow]Could not copy automatically. Select the text manually.[/yellow]"
+            )
+            if error:
+                console.print(f"[dim]{error}[/dim]")
     else:
         console.print(
             "[yellow]This source did not provide direct MTGA import text for this deck.[/yellow]"
@@ -411,29 +420,14 @@ def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry)
     while True:
         raw = (
             console.input(
-                "\n[bold yellow]c=copy decklist to clipboard[/bold yellow], "
-                "[bold cyan]Enter=go back to list (Enter)[/bold cyan]: "
+                "\n[bold cyan]Enter=go back to list (Enter)[/bold cyan]: "
             )
             .strip()
             .lower()
         )
         if raw == "":
             break
-        if raw == "c":
-            if not formatted_deck_text:
-                console.print("[yellow]No Arena import text available to copy.[/yellow]")
-                continue
-            copied, error = _copy_to_clipboard(formatted_deck_text)
-            if copied:
-                console.print("[bold green]Copied decklist to clipboard.[/bold green]")
-            else:
-                console.print(
-                    "[yellow]Could not copy automatically. Select the text manually.[/yellow]"
-                )
-                if error:
-                    console.print(f"[dim]{error}[/dim]")
-            continue
-        console.print("[yellow]Invalid input. Press Enter or type c.[/yellow]")
+        console.print("[yellow]Invalid input. Press Enter to go back.[/yellow]")
     return hydrated
 
 
