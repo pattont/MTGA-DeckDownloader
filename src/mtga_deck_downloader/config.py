@@ -12,7 +12,7 @@ DEFAULT_MOXFIELD_NAMES = (
     "carlomtg",
 )
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.json"
 
 
 @dataclass(frozen=True)

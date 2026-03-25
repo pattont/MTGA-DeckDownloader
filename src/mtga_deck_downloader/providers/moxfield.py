@@ -50,6 +50,7 @@ class MoxfieldProvider(DeckProvider):
         deck_text = self._scraper.fetch_deck_text(deck.source_url)
         if deck_text is None:
             return deck
+        deck_text = f"About\n{deck.name}\n\n{deck_text}"
         return replace(deck, deck_text=deck_text)
 
 

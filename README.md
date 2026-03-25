@@ -108,25 +108,29 @@ Variant screen (Untapped):
 
 ```text
 app.py
-mtga_deck_downloader/
-  providers/
-    aetherhub.py
-    base.py
-    magic_gg.py
-    untapped.py
-    registry.py
-  scrapers/
-    aetherhub.py
-    magic_gg.py
-    untapped.py
-    untapped_deckstring.py
-  ui.py
-  models.py
+src/
+  mtga_deck_downloader/
+    providers/
+      aetherhub.py
+      base.py
+      magic_gg.py
+      moxfield.py
+      untapped.py
+      registry.py
+    scrapers/
+      aetherhub.py
+      magic_gg.py
+      moxfield.py
+      untapped.py
+      untapped_deckstring.py
+    config.py
+    ui.py
+    models.py
 ```
 
 ## Add a New Source Provider
 
-1. Create a new module in `mtga_deck_downloader/providers/`.
+1. Create a new module in `src/mtga_deck_downloader/providers/`.
 2. Subclass `DeckProvider`.
 3. Implement:
    - `sources`
