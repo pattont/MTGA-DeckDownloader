@@ -37,6 +37,8 @@ class DeckEntry:
     format_label: str
     matches: int | None = None
     win_rate: float | None = None
+    player_name: str | None = None
+    placing: str | None = None
     event_name: str | None = None
     event_date: str | None = None
     deck_text: str | None = None

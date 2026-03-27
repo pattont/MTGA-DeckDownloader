@@ -1,7 +1,7 @@
 from dataclasses import replace
 
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
-from mtga_deck_downloader.providers.base import DeckProvider
+from mtga_deck_downloader.providers.base import DeckProvider, ResultViewConfig
 from mtga_deck_downloader.scrapers.untapped import UntappedScraper
 
 
@@ -65,6 +65,25 @@ class UntappedProvider(DeckProvider):
         if deck_text is None:
             return deck
         return replace(deck, deck_text=deck_text)
+
+    def result_view_config(
+        self,
+        source: DeckSource | None = None,
+        *,
+        variants: bool = False,
+        parent: DeckEntry | None = None,
+    ) -> ResultViewConfig:
+        if variants and parent is not None:
+            return ResultViewConfig(
+                title=f"{parent.name} Variants",
+                count_label="Deck variants",
+            )
+        return ResultViewConfig(
+            count_label="Archetypes found",
+            name_column_label="Archetype",
+            selection_label="Archetype",
+            selection_action="variants",
+        )
 
 
 PROVIDER_CLASS = UntappedProvider

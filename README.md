@@ -6,9 +6,9 @@ Console app for finding playable Magic The Gathering Arena decklists from multip
 
 - Loads providers dynamically (modular source architecture).
 - Lets you choose site + format (`Bo1`, `Bo3`, or `Any`).
-- Lets you optionally choose a specific source endpoint/tab when a site exposes multiple feeds.
+- Lets you optionally choose a specific source endpoint/tab/section when a site exposes multiple feeds.
 - Shows ranked results in a Rich terminal UI.
-- Opens deck details and displays Arena import text when available.
+- Opens deck details, auto-copies Arena import text to the clipboard when available, and shows the raw import text in the terminal.
 - Uses lazy deck-text loading for heavy sources so list and variant screens stay fast.
 
 ## Current Sources
@@ -46,6 +46,15 @@ Untapped flow in UI:
 - Loads creator profiles from `config.json` via the `MoxfieldNames` array.
 - Uses Moxfield public APIs to fetch the first 15 public decks from each configured creator.
 - Opens full deck text from the public deck API when you select a deck.
+
+### `tcgplayer.com`
+
+- Uses TCGPlayer content APIs for:
+  - Trending Decks
+  - Latest Decks
+  - Events
+- Event selections open a second result screen with top-finishing decks, including place and player name.
+- Deck details hydrate from TCGPlayer's deck API and build Arena import text from the returned card map.
 
 ## Requirements
 
@@ -94,15 +103,23 @@ Main results screen:
 
 Source endpoint screen (multi-feed sites):
 
-- Enter endpoint number to fetch only that tab/feed.
-- `a` to fetch all endpoints matching the selected format.
+- Enter endpoint/source number to fetch only that tab/feed/section.
+- `a` to fetch all matching sources when that provider supports it.
 - `b` to go back to format selection.
 
-Variant screen (Untapped):
+Variant screens:
 
-- Enter a number for deck details.
-- `b` to go back to archetypes.
+- Untapped: pick an archetype, then a variant deck.
+- TCGPlayer Events: pick an event, then a top deck.
+- Enter a number for deck details on the second screen.
+- `b` to go back to the previous list.
 - `f` / `s` / `q` as above.
+
+Deck details:
+
+- If direct Arena text is available, it is copied to your clipboard automatically.
+- Press `Enter` to go back to the previous list.
+- Press `q` to quit.
 
 ## Project Layout
 
@@ -115,12 +132,14 @@ src/
       base.py
       magic_gg.py
       moxfield.py
+      tcgplayer.py
       untapped.py
       registry.py
     scrapers/
       aetherhub.py
       magic_gg.py
       moxfield.py
+      tcgplayer.py
       untapped.py
       untapped_deckstring.py
     config.py
@@ -143,13 +162,13 @@ src/
 
 - Untapped Bo3 win-rate fields may be unavailable in public payloads.
 - External site markup/API contracts can change and break scraping.
-- Clipboard integration is not implemented yet (copy is manual from console).
+- TCGPlayer event deck resolution relies on event-name search plus deck-detail verification because the public event API does not expose the top-deck list directly.
 
 ## Next Steps
 
-- Add clipboard copy support for deck text.
 - Add refresh/pagination and optional rank/time-range filters.
 - Add tests around parser and provider behavior.
+- Add more config-driven sources beyond Moxfield.
 
 ---
 

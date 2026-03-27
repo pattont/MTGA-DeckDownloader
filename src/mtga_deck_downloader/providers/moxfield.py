@@ -18,6 +18,22 @@ class MoxfieldProvider(DeckProvider):
         self._scraper = MoxfieldScraper()
 
     @property
+    def source_picker_title(self) -> str:
+        return "Configured Creators"
+
+    @property
+    def source_picker_item_label(self) -> str:
+        return "creator"
+
+    @property
+    def source_picker_all_label(self) -> str:
+        return "all configured creators"
+
+    @property
+    def change_label(self) -> str:
+        return "creator"
+
+    @property
     def sources(self) -> list[DeckSource]:
         config = load_config()
         return [
@@ -50,7 +66,7 @@ class MoxfieldProvider(DeckProvider):
         deck_text = self._scraper.fetch_deck_text(deck.source_url)
         if deck_text is None:
             return deck
-        deck_text = f"About\n{deck.name}\n\n{deck_text}"
+        deck_text = f"About\nName {deck.name}\n\n{deck_text}"
         return replace(deck, deck_text=deck_text)
 
 

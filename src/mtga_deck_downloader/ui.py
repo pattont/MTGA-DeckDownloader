@@ -13,7 +13,7 @@ from rich.table import Table
 from rich.text import Text
 
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
-from mtga_deck_downloader.providers.base import DeckProvider
+from mtga_deck_downloader.providers.base import DeckProvider, ResultViewConfig
 from mtga_deck_downloader.providers.registry import LAST_PROVIDER_ERRORS, load_providers
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -42,7 +42,7 @@ def _render_site_header(console: Console) -> None:
 
     subtitle = Text("Select a decklist source website to begin.", style="white")
     scope = Text(
-        "Currently supports Standard BO1/BO3 sources and configurable Moxfield creators.",
+        "Currently supports Standard BO1/BO3 sources, configurable Moxfield creators, and TCGPlayer Standard feeds.",
         style="bold yellow",
     )
     console.print(
@@ -220,8 +220,8 @@ def _browse_decks(
     decks: list[DeckEntry],
     selected_source: DeckSource | None = None,
 ) -> str:
-    is_untapped = provider.key == "untapped"
-    change_label = "creator" if provider.supported_formats == {MatchFormat.ANY} else "format"
+    view_config = provider.result_view_config(selected_source)
+    change_label = provider.change_label
     while True:
         _show_deck_table(
             console,
@@ -229,14 +229,13 @@ def _browse_decks(
             selected_format,
             decks,
             selected_source=selected_source,
-            title="Scraped Deck Results",
-            count_label="Archetypes found" if is_untapped else "Decks found",
-            name_column_label="Archetype" if is_untapped else "Deck",
+            title=view_config.title,
+            count_label=view_config.count_label,
+            name_column_label=view_config.name_column_label,
         )
         prompt = (
-            f"\n[bold cyan]Archetype # for variants, f={change_label}, s=site, q=quit[/bold cyan]"
-            if is_untapped
-            else f"\n[bold cyan]Deck # for details, f={change_label}, s=site, q=quit[/bold cyan]"
+            f"\n[bold cyan]{view_config.selection_label} # for {view_config.selection_action}, "
+            f"f={change_label}, s=site, q=quit[/bold cyan]"
         )
         raw = Prompt.ask(
             prompt,
@@ -298,6 +297,12 @@ def _show_deck_table(
     name_column_label: str = "Deck",
 ) -> None:
     _clear_screen(console)
+    suppress_event_names = (
+        provider.key == "tcgplayer"
+        and selected_source is not None
+        and selected_source.name == "Events"
+        and title.endswith("Top Decks")
+    )
     source_text = (
         f"Source endpoint: [bold cyan]{selected_source.name}[/bold cyan]\n"
         if selected_source is not None
@@ -316,6 +321,8 @@ def _show_deck_table(
 
     show_win_rate = any(deck.win_rate is not None for deck in decks)
     show_matches = any(deck.matches is not None for deck in decks)
+    show_player = any(deck.player_name is not None for deck in decks)
+    show_placing = any(deck.placing is not None for deck in decks)
     is_magic_gg = provider.key == "magic_gg"
 
     table = Table(show_header=True, header_style="bold magenta", show_lines=True)
@@ -325,6 +332,10 @@ def _show_deck_table(
         table.add_column("Win %", justify="right")
     if show_matches:
         table.add_column("Matches", justify="right")
+    if show_placing:
+        table.add_column("Place", no_wrap=True)
+    if show_player:
+        table.add_column("Player", overflow="fold", max_width=20)
     table.add_column("Format", no_wrap=True)
     table.add_column(
         "Event/Notes",
@@ -333,17 +344,21 @@ def _show_deck_table(
     )
 
     for idx, deck in enumerate(decks, start=1):
-        note = _table_note(deck, truncate=not is_magic_gg)
-        row = [
-            str(idx),
-            deck.name,
-            deck.format_label,
-            note,
-        ]
+        note = _table_note(
+            deck,
+            truncate=not is_magic_gg,
+            include_event_name=not suppress_event_names,
+        )
+        row = [str(idx), deck.name]
         if show_win_rate:
-            row.insert(2, _format_percent(deck.win_rate))
+            row.append(_format_percent(deck.win_rate))
         if show_matches:
-            row.insert(3 if show_win_rate else 2, str(deck.matches) if deck.matches is not None else "-")
+            row.append(str(deck.matches) if deck.matches is not None else "-")
+        if show_placing:
+            row.append(deck.placing or "-")
+        if show_player:
+            row.append(deck.player_name or "-")
+        row.extend([deck.format_label, note])
         table.add_row(*row)
     console.print(table)
 
@@ -356,7 +371,12 @@ def _browse_variants(
     variants: list[DeckEntry],
     selected_source: DeckSource | None = None,
 ) -> str:
-    change_label = "creator" if provider.supported_formats == {MatchFormat.ANY} else "format"
+    view_config = provider.result_view_config(
+        selected_source,
+        variants=True,
+        parent=archetype,
+    )
+    change_label = provider.change_label
     while True:
         _show_deck_table(
             console=console,
@@ -364,12 +384,13 @@ def _browse_variants(
             selected_format=selected_format,
             decks=variants,
             selected_source=selected_source,
-            title=f"{archetype.name} Variants",
-            count_label="Deck variants",
-            name_column_label="Deck",
+            title=view_config.title,
+            count_label=view_config.count_label,
+            name_column_label=view_config.name_column_label,
         )
         raw = Prompt.ask(
-            f"\n[bold cyan]Deck # for details, b=back, f={change_label}, s=site, q=quit[/bold cyan]",
+            f"\n[bold cyan]{view_config.selection_label} # for {view_config.selection_action}, "
+            f"b=back, f={change_label}, s=site, q=quit[/bold cyan]",
             default="b",
             show_choices=False,
         ).strip()
@@ -413,6 +434,10 @@ def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry)
         info_lines.append(f"[bold]Win Rate:[/bold] {_format_percent(hydrated.win_rate)}")
     if hydrated.matches is not None:
         info_lines.append(f"[bold]Matches:[/bold] {hydrated.matches}")
+    if hydrated.placing:
+        info_lines.append(f"[bold]Place:[/bold] {hydrated.placing}")
+    if hydrated.player_name:
+        info_lines.append(f"[bold]Player:[/bold] {hydrated.player_name}")
     if hydrated.event_date:
         info_lines.append(f"[bold]Event Date:[/bold] {hydrated.event_date}")
     if hydrated.notes:
@@ -518,12 +543,15 @@ def _format_percent(value: float | None) -> str:
     return f"{value:.2f}%"
 
 
-def _table_note(deck: DeckEntry, truncate: bool) -> str:
-    if deck.event_name:
-        return _truncate(deck.event_name, 42) if truncate else deck.event_name
-    if not deck.notes:
+def _table_note(deck: DeckEntry, truncate: bool, include_event_name: bool = True) -> str:
+    note_parts: list[str] = []
+    if include_event_name and deck.event_name:
+        note_parts.append(deck.event_name)
+    if deck.notes:
+        note_parts.append(deck.notes)
+    if not note_parts:
         return "-"
-    note = deck.notes.replace("\n", " ").strip()
+    note = " | ".join(note_parts).replace("\n", " ").strip()
     return _truncate(note, 42) if truncate else note
 
 
@@ -600,13 +628,12 @@ def _pick_source(
     console: Console, provider: DeckProvider, selected_format: MatchFormat
 ) -> DeckSource | str | None:
     sources = provider.list_sources(selected_format)
-    is_creator_list = provider.supported_formats == {MatchFormat.ANY}
     _clear_screen(console)
     console.print(
         Panel(
             f"[bold green]{provider.display_name}[/bold green]\n"
             f"Format filter: [bold cyan]{selected_format.label}[/bold cyan]",
-            title="Configured Creators" if is_creator_list else "Deck Source Endpoints",
+            title=provider.source_picker_title,
             border_style="cyan",
         )
     )
@@ -625,17 +652,23 @@ def _pick_source(
     console.print(table)
 
     if len(sources) == 1:
-        console.print("\n[dim]Only one endpoint matches this format. Using it automatically...[/dim]")
+        console.print(
+            f"\n[dim]Only one {provider.source_picker_item_label} matches this filter. "
+            "Using it automatically...[/dim]"
+        )
         return sources[0]
 
     while True:
+        options = [
+            f"Select {provider.source_picker_item_label} #",
+        ]
+        if provider.allow_all_sources:
+            options.append(f"a={provider.source_picker_all_label}")
+        options.append("b=back")
+        options.append("q=quit")
         raw = Prompt.ask(
-            (
-                "\n[bold cyan]Select creator #, a=all configured creators, b=back, q=quit[/bold cyan]"
-                if is_creator_list
-                else "\n[bold cyan]Select endpoint #, a=all matching, b=back, q=quit[/bold cyan]"
-            ),
-            default="a",
+            f"\n[bold cyan]{', '.join(options)}[/bold cyan]",
+            default="a" if provider.allow_all_sources else "b",
             show_choices=False,
         ).strip()
         lowered = raw.lower()
@@ -643,10 +676,13 @@ def _pick_source(
             return "q"
         if lowered == "b":
             return "b"
-        if lowered == "a":
+        if lowered == "a" and provider.allow_all_sources:
             return None
         if raw.isdigit():
             selection = int(raw)
             if 1 <= selection <= len(sources):
                 return sources[selection - 1]
-        console.print("[yellow]Invalid selection. Enter a number, a, or b.[/yellow]")
+        valid_choices = "a, b, or q" if provider.allow_all_sources else "b or q"
+        console.print(
+            f"[yellow]Invalid selection. Enter a number, {valid_choices}.[/yellow]"
+        )

@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC
+from dataclasses import dataclass
 
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
+
+
+@dataclass(frozen=True)
+class ResultViewConfig:
+    title: str = "Scraped Deck Results"
+    count_label: str = "Decks found"
+    name_column_label: str = "Deck"
+    selection_label: str = "Deck"
+    selection_action: str = "details"
 
 
 class DeckProvider(ABC):
@@ -43,3 +53,32 @@ class DeckProvider(ABC):
 
     def hydrate_deck(self, deck: DeckEntry) -> DeckEntry:
         return deck
+
+    @property
+    def source_picker_title(self) -> str:
+        return "Deck Source Endpoints"
+
+    @property
+    def source_picker_item_label(self) -> str:
+        return "endpoint"
+
+    @property
+    def source_picker_all_label(self) -> str:
+        return "all matching endpoints"
+
+    @property
+    def change_label(self) -> str:
+        return "format"
+
+    @property
+    def allow_all_sources(self) -> bool:
+        return True
+
+    def result_view_config(
+        self,
+        source: DeckSource | None = None,
+        *,
+        variants: bool = False,
+        parent: DeckEntry | None = None,
+    ) -> ResultViewConfig:
+        return ResultViewConfig()
