@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -11,6 +12,7 @@ class MoxfieldScraper:
     USER_DECKS_URL = "https://api2.moxfield.com/v2/users/{username}/decks"
     DECK_DETAILS_URL = "https://api2.moxfield.com/v2/decks/all/{public_id}"
     DEFAULT_LIMIT = 15
+    SPLIT_NAME_RE = re.compile(r"^(.*?)(?:\s+/+\s+.*?)(\s+\([^)]+\)\s+\S+)?$")
 
     def __init__(self) -> None:
         try:
@@ -134,8 +136,18 @@ class MoxfieldScraper:
                 resolved_name = card_info.get("name")
                 if isinstance(resolved_name, str) and resolved_name.strip():
                     card_name = resolved_name.strip()
+            card_name = MoxfieldScraper._normalize_card_name(card_name)
             lines.append(f"{quantity} {card_name}")
         return lines
+
+    @classmethod
+    def _normalize_card_name(cls, card_name: str) -> str:
+        match = cls.SPLIT_NAME_RE.match(card_name.strip())
+        if not match:
+            return card_name.strip()
+        front_face = match.group(1).strip()
+        suffix = (match.group(2) or "").strip()
+        return f"{front_face} {suffix}".strip()
 
     @staticmethod
     def _extract_public_id(public_url: str) -> str:
