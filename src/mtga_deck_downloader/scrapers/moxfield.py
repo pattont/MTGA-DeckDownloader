@@ -11,6 +11,7 @@ from mtga_deck_downloader.scrapers.common import ScrapeError
 class MoxfieldScraper:
     USER_DECKS_URL = "https://api2.moxfield.com/v2/users/{username}/decks"
     DECK_DETAILS_URL = "https://api2.moxfield.com/v2/decks/all/{public_id}"
+    ARENA_EXPORT_URL = "https://api2.moxfield.com/v2/decks/all/{public_id}/export/arena"
     DEFAULT_LIMIT = 15
     SPLIT_NAME_RE = re.compile(r"^(.*?)(?:\s+/+\s+.*?)(\s+\([^)]+\)\s+\S+)?$")
 
@@ -94,6 +95,11 @@ class MoxfieldScraper:
             self._deck_cache[public_id] = None
             return None
 
+        arena_export = self._fetch_arena_export(public_id, payload)
+        if arena_export:
+            self._deck_cache[public_id] = arena_export
+            return arena_export
+
         sections = [
             ("Deck", payload.get("mainboard")),
             ("Sideboard", payload.get("sideboard")),
@@ -117,6 +123,27 @@ class MoxfieldScraper:
         deck_text = "\n".join(parts) if parts else None
         self._deck_cache[public_id] = deck_text
         return deck_text
+
+    def _fetch_arena_export(self, public_id: str, payload: dict[str, object]) -> str | None:
+        export_id = payload.get("exportId")
+        if not isinstance(export_id, str) or not export_id.strip():
+            return None
+
+        response = self._session.get(
+            self.ARENA_EXPORT_URL.format(public_id=public_id),
+            params={
+                "arenaOnly": True,
+                "format": "mtga",
+                "includeTags": False,
+                "indicateFoils": False,
+                "exportId": export_id,
+                "ignoreFlavorNames": False,
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        arena_text = response.text.strip()
+        return arena_text or None
 
     @staticmethod
     def _board_lines(board: object) -> list[str]:
