@@ -38,8 +38,11 @@ Untapped flow in UI:
   - Tournament Meta: `https://aetherhub.com/Metagame/Standard-Events/`
   - MTGA BO1 Meta: `https://aetherhub.com/Metagame/Standard-BO1/`
   - MTGA BO3 Meta: `https://aetherhub.com/Metagame/Standard-BO3/`
+- Supports creator deck feeds as source options, currently including:
+  - `MTGMalone`: `https://aetherhub.com/User/MtgMalone/Decks`
 - Parses tournament event names and normalizes event dates to U.S. format (`MM/DD/YYYY`).
 - Pulls direct Arena export text through Aetherhub's deck export endpoint.
+- Creator deck exports are prefixed with `About / Name ... (Creator)` for easier Arena import lookup.
 
 ### `moxfield.com`
 

@@ -74,6 +74,10 @@ class DeckProvider(ABC):
     def allow_all_sources(self) -> bool:
         return True
 
+    @property
+    def format_screen_sources(self) -> list[DeckSource]:
+        return []
+
     def result_view_config(
         self,
         source: DeckSource | None = None,

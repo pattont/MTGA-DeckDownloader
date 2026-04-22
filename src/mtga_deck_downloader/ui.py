@@ -130,25 +130,30 @@ def run_app() -> None:
             return
 
         while True:
-            selected_format = _pick_format(console, provider)
-            if selected_format == "q":
+            format_selection = _pick_format(console, provider)
+            if format_selection == "q":
                 _clear_screen(console)
                 console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
                 return
-            if selected_format is None:
+            if format_selection is None:
                 _clear_screen(console)
                 break
 
-            selected_source = _pick_source(console, provider, selected_format)
-            if selected_source == "q":
-                _clear_screen(console)
-                console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
-                return
-            if selected_source == "b":
-                _clear_screen(console)
-                if provider.supported_formats == {MatchFormat.ANY}:
-                    break
-                continue
+            if isinstance(format_selection, DeckSource):
+                selected_format = MatchFormat.ANY
+                selected_source = format_selection
+            else:
+                selected_format = format_selection
+                selected_source = _pick_source(console, provider, selected_format)
+                if selected_source == "q":
+                    _clear_screen(console)
+                    console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
+                    return
+                if selected_source == "b":
+                    _clear_screen(console)
+                    if provider.supported_formats == {MatchFormat.ANY}:
+                        break
+                    continue
 
             decks = _fetch_decks(
                 console=console,
@@ -586,7 +591,7 @@ def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvi
         console.print("[yellow]Invalid selection. Try again.[/yellow]")
 
 
-def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | str | None:
+def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | DeckSource | str | None:
     if provider.supported_formats == {MatchFormat.ANY}:
         return MatchFormat.ANY
 
@@ -610,7 +615,19 @@ def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | str 
         table.add_row("3", MatchFormat.BO3.label)
         console.print(table)
 
-        raw = Prompt.ask("\n[bold cyan]Select format (or b to go back, q to quit)[/bold cyan]")
+        format_screen_sources = provider.format_screen_sources
+        if format_screen_sources:
+            creator_table = Table(show_header=True, header_style="bold magenta")
+            creator_table.add_column("#", justify="right", style="bold")
+            creator_table.add_column("Creator")
+            for idx, source in enumerate(format_screen_sources, start=4):
+                creator_table.add_row(str(idx), source.name.removeprefix("Creator: ").strip() or source.name)
+            console.print()
+            console.print(creator_table)
+
+        raw = Prompt.ask(
+            "\n[bold cyan]Select format or creator (or b to go back, q to quit)[/bold cyan]"
+        )
         if raw.lower() == "q":
             return "q"
         if raw.lower() == "b":
@@ -621,6 +638,11 @@ def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | str 
             return MatchFormat.BO1
         if raw == "3":
             return MatchFormat.BO3
+        if raw.isdigit() and format_screen_sources:
+            selection = int(raw)
+            creator_index = selection - 4
+            if 0 <= creator_index < len(format_screen_sources):
+                return format_screen_sources[creator_index]
         console.print("[yellow]Invalid selection. Try again.[/yellow]")
 
 

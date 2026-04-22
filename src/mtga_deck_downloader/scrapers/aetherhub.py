@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup, Tag
 
@@ -16,10 +16,16 @@ class AetherhubScraper:
     TOURNAMENT_META_URL = "https://aetherhub.com/Metagame/Standard-Events/"
     BO1_META_URL = "https://aetherhub.com/Metagame/Standard-BO1/"
     BO3_META_URL = "https://aetherhub.com/Metagame/Standard-BO3/"
+    USER_DECKS_PATTERN = re.compile(r"^/User/([^/]+)/Decks(?:/[^/]+)?/?$")
+    USER_DECK_PAGE_ID_RE = re.compile(r'data-deckid="(\d+)"')
     DATE_TOKEN_RE = re.compile(r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b")
     DECK_ID_RE = re.compile(r"-(\d+)(?:[/?#]|$)")
     MATCHES_RE = re.compile(r"(\d+)\s+matches", flags=re.IGNORECASE)
     ENGLISH_LANG_ID = 0
+    CREATOR_FORMAT_IDS = {
+        MatchFormat.BO1: 14,
+        MatchFormat.BO3: 1,
+    }
 
     def __init__(self) -> None:
         try:
@@ -44,6 +50,8 @@ class AetherhubScraper:
             }
         )
         self._deck_text_cache: dict[str, str | None] = {}
+        self._deck_id_cache: dict[str, str] = {}
+        self._user_id_cache: dict[str, str] = {}
 
     def fetch_decks(
         self,
@@ -73,11 +81,14 @@ class AetherhubScraper:
                 if idx == len(feeds) - 1:
                     feed_limit = remaining
 
-            html = self._get_text(url)
-            if url == self.TOURNAMENT_URL:
-                parsed = self._parse_tournament_page(html=html, limit=feed_limit)
+            if self._is_user_decks_url(url):
+                parsed = self.fetch_creator_decks(url, selected_format=selected_format, limit=feed_limit)
             else:
-                parsed = self._parse_meta_page(html=html, format_label=format_label, limit=feed_limit)
+                html = self._get_text(url)
+                if url == self.TOURNAMENT_URL:
+                    parsed = self._parse_tournament_page(html=html, limit=feed_limit)
+                else:
+                    parsed = self._parse_meta_page(html=html, format_label=format_label, limit=feed_limit)
 
             for deck in parsed:
                 if deck.source_url in seen_urls:
@@ -91,7 +102,9 @@ class AetherhubScraper:
 
     def _feeds_for_format(self, selected_format: MatchFormat) -> list[tuple[str, str]]:
         if selected_format is MatchFormat.BO1:
-            return [(self.BO1_META_URL, "Standard / Bo1")]
+            return [
+                (self.BO1_META_URL, "Standard / Bo1"),
+            ]
         if selected_format is MatchFormat.BO3:
             return [
                 (self.TOURNAMENT_URL, "Standard / Bo3"),
@@ -104,6 +117,48 @@ class AetherhubScraper:
             (self.BO1_META_URL, "Standard / Bo1"),
             (self.BO3_META_URL, "Standard / Bo3"),
         ]
+
+    def fetch_creator_decks(
+        self,
+        user_url: str,
+        selected_format: MatchFormat,
+        limit: int = 50,
+        creator_label: str | None = None,
+    ) -> list[DeckEntry]:
+        username = self._extract_username_from_user_url(user_url)
+        if not username:
+            raise ScrapeError(f"Could not determine Aetherhub username from {user_url}.")
+        creator_name = creator_label or username
+
+        user_id = self._fetch_user_id(username)
+        if not user_id:
+            raise ScrapeError(f"Could not determine Aetherhub user id for {username}.")
+
+        if selected_format is MatchFormat.ANY:
+            formats = [MatchFormat.BO1, MatchFormat.BO3]
+        else:
+            formats = [selected_format]
+
+        results: list[DeckEntry] = []
+        seen_urls: set[str] = set()
+        for match_format in formats:
+            format_id = self.CREATOR_FORMAT_IDS.get(match_format)
+            if format_id is None:
+                continue
+            payload = self._fetch_user_deck_rows(user_id=user_id, format_id=format_id, length=limit)
+            for row in payload:
+                deck = self._parse_user_deck_row(
+                    row=row,
+                    creator_name=creator_name,
+                    selected_format=match_format,
+                )
+                if deck is None or deck.source_url in seen_urls:
+                    continue
+                seen_urls.add(deck.source_url)
+                results.append(deck)
+                if len(results) >= limit:
+                    return results[:limit]
+        return results[:limit]
 
     def _get_text(self, url: str) -> str:
         response = self._session.get(url, timeout=40)
@@ -270,6 +325,10 @@ class AetherhubScraper:
 
     def fetch_deck_text(self, source_url: str) -> str | None:
         deck_id = self._extract_deck_id(source_url)
+        if not deck_id:
+            deck_id = self._deck_id_cache.get(source_url, "")
+        if not deck_id:
+            deck_id = self._fetch_deck_id_from_page(source_url)
         return self._fetch_mtga_deck_text(deck_id)
 
     def _fetch_mtga_deck_text(self, deck_id: str) -> str | None:
@@ -357,6 +416,130 @@ class AetherhubScraper:
     def _extract_deck_id(self, url: str) -> str:
         match = self.DECK_ID_RE.search(url)
         return match.group(1) if match else ""
+
+    def _fetch_user_id(self, username: str) -> str:
+        if username in self._user_id_cache:
+            return self._user_id_cache[username]
+        html = self._get_text(f"{self.BASE_URL}/User/{username}/Decks")
+        match = re.search(r'id="metaHubTable"[^>]*data-user-id="(\d+)"', html)
+        user_id = match.group(1) if match else ""
+        if user_id:
+            self._user_id_cache[username] = user_id
+        return user_id
+
+    def _fetch_user_deck_rows(self, user_id: str, format_id: int, length: int) -> list[dict[str, object]]:
+        response = self._session.post(
+            f"{self.BASE_URL}/Meta/FetchMetaListAdv?u={user_id}&formatId={format_id}",
+            json=self._datatable_payload(length=length),
+            timeout=40,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        rows = payload.get("metadecks") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            raise ScrapeError("Unexpected Aetherhub user deck payload.")
+        return [row for row in rows if isinstance(row, dict)]
+
+    def _parse_user_deck_row(
+        self,
+        row: dict[str, object],
+        creator_name: str,
+        selected_format: MatchFormat,
+    ) -> DeckEntry | None:
+        relative_url = str(row.get("url") or "").strip()
+        deck_name = str(row.get("name") or "").strip()
+        if not relative_url or not deck_name:
+            return None
+
+        source_url = urljoin(self.BASE_URL, relative_url)
+        deck_id = str(row.get("id") or "").strip()
+        if deck_id:
+            self._deck_id_cache[source_url] = deck_id
+
+        tags = row.get("tags")
+        tag_list = [str(tag).strip() for tag in tags if str(tag).strip()] if isinstance(tags, list) else []
+        exports = row.get("exports")
+        views = row.get("views")
+        note_parts: list[str] = [f"Creator: {creator_name}"]
+        if tag_list:
+            note_parts.append(f"Tags: {', '.join(tag_list[:3])}")
+        if isinstance(exports, int):
+            note_parts.append(f"Exports: {exports}")
+        if isinstance(views, int):
+            note_parts.append(f"Views: {views}")
+
+        updated = self._format_timestamp(row.get("updatedhidden") or row.get("updated"))
+        format_label = self._user_format_label(row, selected_format)
+
+        return DeckEntry(
+            name=deck_name,
+            source_site="aetherhub.com",
+            source_url=source_url,
+            format_label=format_label,
+            event_date=updated,
+            notes=" | ".join(note_parts),
+        )
+
+    def _fetch_deck_id_from_page(self, source_url: str) -> str:
+        if source_url in self._deck_id_cache:
+            return self._deck_id_cache[source_url]
+        html = self._get_text(source_url)
+        match = self.USER_DECK_PAGE_ID_RE.search(html)
+        deck_id = match.group(1) if match else ""
+        if deck_id:
+            self._deck_id_cache[source_url] = deck_id
+        return deck_id
+
+    @staticmethod
+    def _datatable_payload(length: int) -> dict[str, object]:
+        return {
+            "draw": 1,
+            "columns": [
+                {"data": "name", "name": "", "searchable": True, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "color", "name": "", "searchable": True, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "tags", "name": "", "searchable": True, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "likes", "name": "", "searchable": True, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "views", "name": "", "searchable": True, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "exports", "name": "", "searchable": True, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "updated", "name": "", "searchable": True, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "updatedhidden", "name": "", "searchable": False, "orderable": True, "search": {"value": "", "regex": False}},
+                {"data": "popularity", "name": "", "searchable": False, "orderable": True, "search": {"value": "", "regex": False}},
+            ],
+            "order": [{"column": 6, "dir": "desc"}],
+            "start": 0,
+            "length": max(1, length),
+            "search": {"value": "", "regex": False},
+        }
+
+    @classmethod
+    def _extract_username_from_user_url(cls, user_url: str) -> str:
+        path = urlparse(user_url).path
+        match = cls.USER_DECKS_PATTERN.match(path)
+        return match.group(1) if match else ""
+
+    @staticmethod
+    def _is_user_decks_url(url: str) -> bool:
+        return "/User/" in url and "/Decks" in url
+
+    @staticmethod
+    def _format_timestamp(value: object) -> str | None:
+        if isinstance(value, (int, float)):
+            try:
+                return datetime.utcfromtimestamp(float(value) / 1000.0).strftime("%m/%d/%Y")
+            except (ValueError, OSError):
+                return None
+        return None
+
+    @staticmethod
+    def _user_format_label(row: dict[str, object], selected_format: MatchFormat) -> str:
+        type_url = str(row.get("typeurl") or "").strip()
+        type_name = str(row.get("type") or "").strip()
+        lowered = " ".join([type_url, type_name]).lower()
+        if "standard-bo1" in lowered or "arena standard" in lowered:
+            return "Standard / Bo1"
+        if "traditional-standard" in lowered or type_name == "Standard":
+            return "Standard / Bo3"
+        return selected_format.label
 
     def _extract_matches(self, text: str) -> int | None:
         match = self.MATCHES_RE.search(text or "")
