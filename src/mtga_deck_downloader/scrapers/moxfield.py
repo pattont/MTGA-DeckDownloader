@@ -9,7 +9,7 @@ from mtga_deck_downloader.scrapers.common import ScrapeError
 
 
 class MoxfieldScraper:
-    USER_DECKS_URL = "https://api2.moxfield.com/v2/users/{username}/decks"
+    USER_DECKS_URL = "https://api2.moxfield.com/v2/decks/search"
     DECK_DETAILS_URL = "https://api2.moxfield.com/v2/decks/all/{public_id}"
     ARENA_EXPORT_URL = "https://api2.moxfield.com/v2/decks/all/{public_id}/export/arena"
     DEFAULT_LIMIT = 15
@@ -41,8 +41,14 @@ class MoxfieldScraper:
 
     def fetch_user_decks(self, username: str, limit: int = DEFAULT_LIMIT) -> list[DeckEntry]:
         response = self._session.get(
-            self.USER_DECKS_URL.format(username=username),
-            params={"pageNumber": 1, "pageSize": max(1, limit)},
+            self.USER_DECKS_URL,
+            params={
+                "pageNumber": 1,
+                "pageSize": max(1, limit),
+                "sortType": "updated",
+                "sortDirection": "descending",
+                "authorUserNames": username,
+            },
             timeout=30,
         )
         response.raise_for_status()
