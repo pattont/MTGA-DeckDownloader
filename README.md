@@ -78,13 +78,20 @@ The repo root contains `config.json`. Moxfield creator profiles are configured h
 ```json
 {
   "MoxfieldNames": [
-    "Ashlizzlle",
+    {
+      "Name": "Ashlizzlle",
+      "ShortName": "Ash"
+    },
     "Swayzemtg",
     "covertgoblue",
     "carlomtg"
   ]
 }
 ```
+
+Each entry can be either a creator name string or an object with `Name` and optional `ShortName`.
+Moxfield Arena export names include the creator label, such as `Name Boros Mouse Offense (Ash)`.
+When `ShortName` is omitted, the full creator name is used in the export name.
 
 ## Quick Start
 

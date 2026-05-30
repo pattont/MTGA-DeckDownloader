@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from mtga_deck_downloader.config import load_config
+from mtga_deck_downloader.config import MoxfieldCreator, load_config
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.providers.base import DeckProvider
 from mtga_deck_downloader.scrapers.moxfield import MoxfieldScraper
@@ -38,12 +38,12 @@ class MoxfieldProvider(DeckProvider):
         config = load_config()
         return [
             DeckSource(
-                name=username,
-                url=f"https://moxfield.com/users/{username}",
+                name=creator.name,
+                url=f"https://moxfield.com/users/{creator.name}",
                 description="First 15 public decks from this creator's All Decks list.",
                 formats=(MatchFormat.ANY,),
             )
-            for username in config.moxfield_names
+            for creator in config.moxfield_creators
         ]
 
     def fetch_decks(
@@ -66,9 +66,51 @@ class MoxfieldProvider(DeckProvider):
         deck_text = self._scraper.fetch_deck_text(deck.source_url)
         if deck_text is None:
             return deck
-        if not deck_text.startswith("About\n"):
-            deck_text = f"About\nName {deck.name}\n\n{deck_text}"
+        deck_text = self._with_import_deck_name(deck_text, self._import_deck_name(deck))
         return replace(deck, deck_text=deck_text)
+
+    def _import_deck_name(self, deck: DeckEntry) -> str:
+        creator_label = self._creator_label_for_deck(deck)
+        if not creator_label:
+            return deck.name
+
+        suffix = f" ({creator_label})"
+        return deck.name if deck.name.endswith(suffix) else f"{deck.name}{suffix}"
+
+    @staticmethod
+    def _with_import_deck_name(deck_text: str, import_deck_name: str) -> str:
+        if not deck_text.startswith("About\n"):
+            return f"About\nName {import_deck_name}\n\n{deck_text}"
+
+        lines = deck_text.splitlines()
+        for index, line in enumerate(lines):
+            if line.startswith("Name "):
+                lines[index] = f"Name {import_deck_name}"
+                return "\n".join(lines)
+            if index > 0 and not line.strip():
+                break
+
+        return f"About\nName {import_deck_name}\n" + "\n".join(lines[1:])
+
+    @staticmethod
+    def _creator_label_for_deck(deck: DeckEntry) -> str | None:
+        if not deck.notes:
+            return None
+        creator_prefix = "Creator: "
+        creator_name = ""
+        for part in deck.notes.split("|"):
+            stripped = part.strip()
+            if stripped.startswith(creator_prefix):
+                creator_name = stripped.removeprefix(creator_prefix).strip()
+                break
+        if not creator_name:
+            return None
+
+        creator_by_name = {
+            creator.name.lower(): creator for creator in load_config().moxfield_creators
+        }
+        creator = creator_by_name.get(creator_name.lower(), MoxfieldCreator(name=creator_name))
+        return creator.label
 
 
 PROVIDER_CLASS = MoxfieldProvider

@@ -1,8 +1,20 @@
 {
   "MoxfieldNames": [
-    "Ashlizzlle",
-    "SwayzeMTG",
-    "CovertGoBlue",
-    "CarloMTG"
+    {
+      "Name": "Ashlizzlle",
+      "ShortName": "Ash"
+    },
+    {
+      "Name": "SwayzeMTG",
+      "ShortName": "Sway"
+    },
+    {
+      "Name": "CovertGoBlue",
+      "ShortName": "CGB"
+    },
+    {
+      "Name": "CarloMTG",
+      "ShortName": "Carl"
+    }
   ]
 }
