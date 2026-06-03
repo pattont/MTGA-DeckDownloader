@@ -12,11 +12,15 @@ DEFAULT_MOXFIELD_NAMES = (
     "carlomtg",
 )
 
+DEFAULT_AETHERHUB_CREATORS = (
+    "MTGMalone",
+)
+
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.json"
 
 
 @dataclass(frozen=True)
-class MoxfieldCreator:
+class CreatorConfig:
     name: str
     short_name: str | None = None
 
@@ -28,16 +32,23 @@ class MoxfieldCreator:
 
 @dataclass(frozen=True)
 class AppConfig:
-    moxfield_creators: tuple[MoxfieldCreator, ...]
+    moxfield_creators: tuple[CreatorConfig, ...]
+    aetherhub_creators: tuple[CreatorConfig, ...] = ()
 
     @property
     def moxfield_names(self) -> tuple[str, ...]:
         return tuple(creator.name for creator in self.moxfield_creators)
 
 
+MoxfieldCreator = CreatorConfig
+
+
 def load_config() -> AppConfig:
-    raw_creators: list[MoxfieldCreator] = [
-        MoxfieldCreator(name=name) for name in DEFAULT_MOXFIELD_NAMES
+    raw_moxfield_creators: list[CreatorConfig] = [
+        CreatorConfig(name=name) for name in DEFAULT_MOXFIELD_NAMES
+    ]
+    raw_aetherhub_creators: list[CreatorConfig] = [
+        CreatorConfig(name=name) for name in DEFAULT_AETHERHUB_CREATORS
     ]
 
     if CONFIG_PATH.exists():
@@ -48,28 +59,42 @@ def load_config() -> AppConfig:
         if isinstance(payload, dict):
             candidate_names = payload.get("MoxfieldNames")
             if isinstance(candidate_names, list):
-                raw_creators = [
+                raw_moxfield_creators = [
                     creator
                     for item in candidate_names
-                    if (creator := _parse_moxfield_creator(item)) is not None
+                    if (creator := _parse_creator_config(item)) is not None
                 ]
 
-    deduped_creators: list[MoxfieldCreator] = []
+            candidate_aetherhub_creators = payload.get("AtherhubCreators")
+            if isinstance(candidate_aetherhub_creators, list):
+                raw_aetherhub_creators = [
+                    creator
+                    for item in candidate_aetherhub_creators
+                    if (creator := _parse_creator_config(item)) is not None
+                ]
+
+    return AppConfig(
+        moxfield_creators=_dedupe_creators(raw_moxfield_creators),
+        aetherhub_creators=_dedupe_creators(raw_aetherhub_creators),
+    )
+
+
+def _dedupe_creators(creators: list[CreatorConfig]) -> tuple[CreatorConfig, ...]:
+    deduped_creators: list[CreatorConfig] = []
     seen: set[str] = set()
-    for creator in raw_creators:
+    for creator in creators:
         lowered = creator.name.lower()
         if lowered in seen:
             continue
         seen.add(lowered)
         deduped_creators.append(creator)
+    return tuple(deduped_creators)
 
-    return AppConfig(moxfield_creators=tuple(deduped_creators))
 
-
-def _parse_moxfield_creator(item: object) -> MoxfieldCreator | None:
+def _parse_creator_config(item: object) -> CreatorConfig | None:
     if isinstance(item, str):
         name = item.strip()
-        return MoxfieldCreator(name=name) if name else None
+        return CreatorConfig(name=name) if name else None
 
     if not isinstance(item, dict):
         return None
@@ -86,4 +111,4 @@ def _parse_moxfield_creator(item: object) -> MoxfieldCreator | None:
         or item.get("short")
     )
     short_name = raw_short_name.strip() if isinstance(raw_short_name, str) else None
-    return MoxfieldCreator(name=raw_name.strip(), short_name=short_name or None)
+    return CreatorConfig(name=raw_name.strip(), short_name=short_name or None)

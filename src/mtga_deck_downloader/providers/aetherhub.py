@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+from mtga_deck_downloader.config import CreatorConfig, load_config
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.providers.base import DeckProvider
 from mtga_deck_downloader.scrapers.aetherhub import AetherhubScraper
@@ -10,9 +11,6 @@ class AetherhubProvider(DeckProvider):
     display_name = "aetherhub.com"
     description = "Tournament and MTGA metagame decks with direct MTGA export text."
     homepage = "https://aetherhub.com/Metagame/Standard-Events/"
-    CREATOR_SOURCES = (
-        ("MTGMalone", "MtgMalone"),
-    )
 
     def __init__(self) -> None:
         self._scraper = AetherhubScraper()
@@ -49,12 +47,12 @@ class AetherhubProvider(DeckProvider):
                 formats=(MatchFormat.BO3,),
             ),
         ]
-        for label, username in self.CREATOR_SOURCES:
+        for creator in load_config().aetherhub_creators:
             sources.append(
                 DeckSource(
-                    name=f"Creator: {label}",
-                    url=f"https://aetherhub.com/User/{username}/Decks",
-                    description=f"Latest creator decks from {label}.",
+                    name=f"Creator: {creator.name}",
+                    url=f"https://aetherhub.com/User/{creator.name}/Decks",
+                    description=f"Latest creator decks from {creator.name}.",
                     formats=(MatchFormat.BO1, MatchFormat.BO3),
                 )
             )
@@ -120,8 +118,17 @@ class AetherhubProvider(DeckProvider):
             return deck
         creator_name = self._creator_name_from_notes(deck.notes)
         if creator_name:
-            deck_text = f"About\nName {deck.name} ({creator_name})\n\n{deck_text}"
+            creator_label = self._creator_label(creator_name)
+            deck_text = f"About\nName {deck.name} ({creator_label})\n\n{deck_text}"
         return replace(deck, deck_text=deck_text)
+
+    @staticmethod
+    def _creator_label(creator_name: str) -> str:
+        creator_by_name = {
+            creator.name.lower(): creator for creator in load_config().aetherhub_creators
+        }
+        creator = creator_by_name.get(creator_name.lower(), CreatorConfig(name=creator_name))
+        return creator.label
 
     @staticmethod
     def _creator_name_from_notes(notes: str | None) -> str | None:

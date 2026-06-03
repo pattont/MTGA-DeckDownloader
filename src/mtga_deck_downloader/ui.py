@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import random
 import shutil
 import subprocess
 import sys
@@ -128,6 +129,13 @@ def run_app() -> None:
         if provider is None:
             console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
             return
+        if provider == "random":
+            action = _play_random_deck(console, providers)
+            if action == "q":
+                _clear_screen(console)
+                console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
+                return
+            continue
 
         while True:
             format_selection = _pick_format(console, provider)
@@ -216,6 +224,57 @@ def _fetch_decks(
         console.print("\n[yellow]No decks found for the selected filter.[/yellow]")
         return None
     return decks
+
+
+def _play_random_deck(console: Console, providers: list[DeckProvider]) -> str:
+    _clear_screen(console)
+    with console.status("[bold cyan]Choosing a random deck...[/bold cyan]"):
+        selection = _select_random_deck(providers)
+
+    if selection is None:
+        console.print(
+            "\n[yellow]No random deck is available right now. All providers failed or returned no decks.[/yellow]"
+        )
+        if _continue_or_quit(console, "Press Enter to continue or q to quit"):
+            return "q"
+        return "continue"
+
+    provider, deck = selection
+    detailed_deck = _show_deck_detail(console, provider, deck)
+    return "q" if detailed_deck == "q" else "continue"
+
+
+def _select_random_deck(
+    providers: list[DeckProvider],
+    *,
+    rng: object = random,
+    limit: int = 50,
+) -> tuple[DeckProvider, DeckEntry] | None:
+    for provider in rng.sample(providers, len(providers)):
+        try:
+            decks = provider.fetch_decks(
+                selected_format=MatchFormat.ANY,
+                limit=limit,
+                source=None,
+            )
+        except Exception:
+            continue
+        if not decks:
+            continue
+
+        selected_deck = rng.choice(decks)
+        try:
+            variants = provider.fetch_deck_variants(
+                deck=selected_deck,
+                selected_format=MatchFormat.ANY,
+                limit=limit,
+            )
+        except Exception:
+            variants = None
+        if variants:
+            selected_deck = rng.choice(variants)
+        return provider, selected_deck
+    return None
 
 
 def _browse_decks(
@@ -567,7 +626,7 @@ def _truncate(value: str, limit: int) -> str:
     return f"{value[: limit - 3]}..."
 
 
-def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvider | None:
+def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvider | str | None:
     while True:
         _clear_screen(console)
         _render_site_header(console)
@@ -581,9 +640,13 @@ def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvi
             table.add_row(str(idx), provider.display_name, provider.description)
 
         console.print(table)
-        raw = Prompt.ask("\n[bold cyan]Select site number (or q to quit)[/bold cyan]")
+        raw = Prompt.ask(
+            "\n[bold cyan]Select site number, r=random deck (or q to quit)[/bold cyan]"
+        )
         if raw.lower() == "q":
             return None
+        if raw.lower() == "r":
+            return "random"
         if raw.isdigit():
             selection = int(raw)
             if 1 <= selection <= len(providers):

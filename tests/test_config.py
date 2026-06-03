@@ -19,7 +19,10 @@ class ConfigTests(unittest.TestCase):
                         "MoxfieldNames": [
                             {"Name": "Ashlizzlle", "ShortName": "Ash"},
                             "SwayzeMTG",
-                        ]
+                        ],
+                        "AtherhubCreators": [
+                            {"Name": "MTGMalone", "ShortName": "Malone"},
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -38,6 +41,10 @@ class ConfigTests(unittest.TestCase):
             ],
         )
         self.assertEqual(config.moxfield_names, ("Ashlizzlle", "SwayzeMTG"))
+        self.assertEqual(
+            [(creator.name, creator.short_name, creator.label) for creator in config.aetherhub_creators],
+            [("MTGMalone", "Malone", "Malone")],
+        )
 
 
 if __name__ == "__main__":

@@ -38,8 +38,7 @@ Untapped flow in UI:
   - Tournament Meta: `https://aetherhub.com/Metagame/Standard-Events/`
   - MTGA BO1 Meta: `https://aetherhub.com/Metagame/Standard-BO1/`
   - MTGA BO3 Meta: `https://aetherhub.com/Metagame/Standard-BO3/`
-- Supports creator deck feeds as source options, currently including:
-  - `MTGMalone`: `https://aetherhub.com/User/MtgMalone/Decks`
+- Supports creator deck feeds from `config.json` via the `AtherhubCreators` array.
 - Parses tournament event names and normalizes event dates to U.S. format (`MM/DD/YYYY`).
 - Pulls direct Arena export text through Aetherhub's deck export endpoint.
 - Creator deck exports are prefixed with `About / Name ... (Creator)` for easier Arena import lookup.
@@ -73,7 +72,7 @@ Dependencies are listed in `requirements.txt`:
 
 ## Config
 
-The repo root contains `config.json`. Moxfield creator profiles are configured here:
+The repo root contains `config.json`. Creator profiles are configured here:
 
 ```json
 {
@@ -85,12 +84,18 @@ The repo root contains `config.json`. Moxfield creator profiles are configured h
     "Swayzemtg",
     "covertgoblue",
     "carlomtg"
+  ],
+  "AtherhubCreators": [
+    {
+      "Name": "MTGMalone",
+      "ShortName": "Malone"
+    }
   ]
 }
 ```
 
 Each entry can be either a creator name string or an object with `Name` and optional `ShortName`.
-Moxfield Arena export names include the creator label, such as `Name Boros Mouse Offense (Ash)`.
+Moxfield and Aetherhub Arena export names include the creator label, such as `Name Boros Mouse Offense (Ash)`.
 When `ShortName` is omitted, the full creator name is used in the export name.
 
 ## Quick Start
@@ -109,6 +114,12 @@ Main results screen:
 - Enter a number to drill into the selected item.
 - `f` to change format.
 - `s` to change site.
+- `q` to quit.
+
+Site selection screen:
+
+- Enter a number to choose a site.
+- `r` to choose, hydrate, copy, and display one random deck from the available providers.
 - `q` to quit.
 
 Source endpoint screen (multi-feed sites):
