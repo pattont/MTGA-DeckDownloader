@@ -58,6 +58,7 @@ class MoxfieldScraperTests(unittest.TestCase):
                         "sortType": "updated",
                         "sortDirection": "descending",
                         "authorUserNames": "Ashlizzlle",
+                        "showIllegal": True,
                     },
                     "timeout": 30,
                 }

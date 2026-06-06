@@ -48,6 +48,7 @@ class MoxfieldScraper:
                 "sortType": "updated",
                 "sortDirection": "descending",
                 "authorUserNames": username,
+                "showIllegal": True,
             },
             timeout=30,
         )
