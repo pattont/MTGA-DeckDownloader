@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
+from mtga_deck_downloader.config import CreatorConfig, load_config
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.providers.base import DeckProvider, ResultViewConfig
 from mtga_deck_downloader.scrapers.tcgplayer import TCGPlayerScraper
@@ -16,7 +19,7 @@ class TCGPlayerProvider(DeckProvider):
 
     @property
     def sources(self) -> list[DeckSource]:
-        return [
+        sources = [
             DeckSource(
                 name="Trending Decks",
                 url="https://www.tcgplayer.com/content/magic-the-gathering/decks/format/standard",
@@ -36,6 +39,16 @@ class TCGPlayerProvider(DeckProvider):
                 formats=(MatchFormat.ANY,),
             ),
         ]
+        for creator in load_config().tcgplayer_creators:
+            sources.append(
+                DeckSource(
+                    name=f"Creator: {creator.name}",
+                    url=f"https://www.tcgplayer.com/content/author/{quote(creator.name)}/",
+                    description=f"Latest decks from {creator.name}.",
+                    formats=(MatchFormat.ANY,),
+                )
+            )
+        return sources
 
     @property
     def source_picker_title(self) -> str:
@@ -64,6 +77,9 @@ class TCGPlayerProvider(DeckProvider):
             return self._scraper.fetch_trending_decks(limit=min(limit, 50))
         if chosen == "Events":
             return self._scraper.fetch_events(limit=min(limit, 25))
+        if chosen.startswith("Creator: "):
+            creator_name = chosen.removeprefix("Creator: ").strip()
+            return self._scraper.fetch_creator_decks(creator_name, limit=min(limit, 50))
         return self._scraper.fetch_latest_decks(limit=min(limit, 50))
 
     def fetch_deck_variants(
@@ -97,9 +113,37 @@ class TCGPlayerProvider(DeckProvider):
             placing=hydrated.placing,
             event_name=hydrated.event_name,
             event_date=hydrated.event_date,
-            deck_text=f"About\nName {hydrated.name}\n\n{hydrated.deck_text}",
+            deck_text=f"About\nName {self._import_deck_name(hydrated)}\n\n{hydrated.deck_text}",
             notes=hydrated.notes,
         )
+
+    def _import_deck_name(self, deck: DeckEntry) -> str:
+        creator_label = self._creator_label_for_deck(deck)
+        if not creator_label:
+            return deck.name
+
+        suffix = f" ({creator_label})"
+        return deck.name if deck.name.endswith(suffix) else f"{deck.name}{suffix}"
+
+    @staticmethod
+    def _creator_label_for_deck(deck: DeckEntry) -> str | None:
+        if not deck.notes:
+            return None
+        creator_prefix = "Creator: "
+        creator_name = ""
+        for part in deck.notes.split("|"):
+            stripped = part.strip()
+            if stripped.startswith(creator_prefix):
+                creator_name = stripped.removeprefix(creator_prefix).strip()
+                break
+        if not creator_name:
+            return None
+
+        creator_by_name = {
+            creator.name.lower(): creator for creator in load_config().tcgplayer_creators
+        }
+        creator = creator_by_name.get(creator_name.lower(), CreatorConfig(name=creator_name))
+        return creator.label
 
     def result_view_config(
         self,
@@ -127,6 +171,8 @@ class TCGPlayerProvider(DeckProvider):
             return ResultViewConfig(title="Trending Decks")
         if source is not None and source.name == "Latest Decks":
             return ResultViewConfig(title="Latest Decks")
+        if source is not None and source.name.startswith("Creator: "):
+            return ResultViewConfig(title=source.name.removeprefix("Creator: ").strip())
         return ResultViewConfig()
 
 

@@ -55,6 +55,7 @@ Untapped flow in UI:
   - Trending Decks
   - Latest Decks
   - Events
+- Supports creator deck feeds from `config.json` via the `TcgplayerCreators` array.
 - Event selections open a second result screen with top-finishing decks, including place and player name.
 - Deck details hydrate from TCGPlayer's deck API and build Arena import text from the returned card map.
 
@@ -90,12 +91,18 @@ The repo root contains `config.json`. Creator profiles are configured here:
       "Name": "MTGMalone",
       "ShortName": "Malone"
     }
+  ],
+  "TcgplayerCreators": [
+    {
+      "Name": "Arne Huschenbeth",
+      "ShortName": "Arne"
+    }
   ]
 }
 ```
 
 Each entry can be either a creator name string or an object with `Name` and optional `ShortName`.
-Moxfield and Aetherhub Arena export names include the creator label, such as `Name Boros Mouse Offense (Ash)`.
+Moxfield, Aetherhub, and TCGPlayer Arena export names include the creator label, such as `Name Boros Mouse Offense (Ash)`.
 When `ShortName` is omitted, the full creator name is used in the export name.
 
 ## Quick Start

@@ -34,6 +34,7 @@ class CreatorConfig:
 class AppConfig:
     moxfield_creators: tuple[CreatorConfig, ...]
     aetherhub_creators: tuple[CreatorConfig, ...] = ()
+    tcgplayer_creators: tuple[CreatorConfig, ...] = ()
 
     @property
     def moxfield_names(self) -> tuple[str, ...]:
@@ -50,6 +51,7 @@ def load_config() -> AppConfig:
     raw_aetherhub_creators: list[CreatorConfig] = [
         CreatorConfig(name=name) for name in DEFAULT_AETHERHUB_CREATORS
     ]
+    raw_tcgplayer_creators: list[CreatorConfig] = []
 
     if CONFIG_PATH.exists():
         try:
@@ -73,9 +75,22 @@ def load_config() -> AppConfig:
                     if (creator := _parse_creator_config(item)) is not None
                 ]
 
+            candidate_tcgplayer_creators = (
+                payload.get("TcgplayerCreators")
+                or payload.get("TCGPlayerCreators")
+                or payload.get("TcgPlayerCreators")
+            )
+            if isinstance(candidate_tcgplayer_creators, list):
+                raw_tcgplayer_creators = [
+                    creator
+                    for item in candidate_tcgplayer_creators
+                    if (creator := _parse_creator_config(item)) is not None
+                ]
+
     return AppConfig(
         moxfield_creators=_dedupe_creators(raw_moxfield_creators),
         aetherhub_creators=_dedupe_creators(raw_aetherhub_creators),
+        tcgplayer_creators=_dedupe_creators(raw_tcgplayer_creators),
     )
 
 

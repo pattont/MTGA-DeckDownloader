@@ -21,6 +21,23 @@
     {
       "Name": "MTGMalone",
       "ShortName": "Malone"
+    },
+    {
+      "name": "JayVillain",
+      "short_name": "Jay"
+
+    }
+  ],
+  "UntappedCreators": [
+    {
+      "Name": "JimDavisMTG",
+      "ShortName": "JD"
+    }
+  ],
+  "TcgplayerCreators": [
+    {
+      "Name": "Arne Huschenbeth",
+      "ShortName": "Arne"
     }
   ]
 }

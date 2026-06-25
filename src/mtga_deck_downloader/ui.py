@@ -713,6 +713,8 @@ def _pick_source(
     console: Console, provider: DeckProvider, selected_format: MatchFormat
 ) -> DeckSource | str | None:
     sources = provider.list_sources(selected_format)
+    regular_sources, creator_sources = _split_creator_sources(sources)
+    numbered_sources = regular_sources + creator_sources
     _clear_screen(console)
     console.print(
         Panel(
@@ -732,16 +734,30 @@ def _pick_source(
         console.print("[yellow]No source endpoints match that format.[/yellow]")
         return "b"
 
-    for idx, source in enumerate(sources, start=1):
+    for idx, source in enumerate(regular_sources, start=1):
         table.add_row(str(idx), source.name, source.url)
     console.print(table)
 
-    if len(sources) == 1:
+    if creator_sources:
+        creator_table = Table(show_header=True, header_style="bold magenta")
+        creator_table.add_column("#", justify="right", style="bold")
+        creator_table.add_column("Creator", style="bold")
+        creator_table.add_column("URL", overflow="fold")
+        for idx, source in enumerate(creator_sources, start=len(regular_sources) + 1):
+            creator_table.add_row(
+                str(idx),
+                source.name.removeprefix("Creator: ").strip() or source.name,
+                source.url,
+            )
+        console.print()
+        console.print(creator_table)
+
+    if len(numbered_sources) == 1:
         console.print(
             f"\n[dim]Only one {provider.source_picker_item_label} matches this filter. "
             "Using it automatically...[/dim]"
         )
-        return sources[0]
+        return numbered_sources[0]
 
     while True:
         options = [
@@ -765,9 +781,15 @@ def _pick_source(
             return None
         if raw.isdigit():
             selection = int(raw)
-            if 1 <= selection <= len(sources):
-                return sources[selection - 1]
+            if 1 <= selection <= len(numbered_sources):
+                return numbered_sources[selection - 1]
         valid_choices = "a, b, or q" if provider.allow_all_sources else "b or q"
         console.print(
             f"[yellow]Invalid selection. Enter a number, {valid_choices}.[/yellow]"
         )
+
+
+def _split_creator_sources(sources: list[DeckSource]) -> tuple[list[DeckSource], list[DeckSource]]:
+    regular_sources = [source for source in sources if not source.name.startswith("Creator: ")]
+    creator_sources = [source for source in sources if source.name.startswith("Creator: ")]
+    return regular_sources, creator_sources

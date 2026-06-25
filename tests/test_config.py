@@ -23,6 +23,9 @@ class ConfigTests(unittest.TestCase):
                         "AtherhubCreators": [
                             {"Name": "MTGMalone", "ShortName": "Malone"},
                         ],
+                        "TcgplayerCreators": [
+                            {"Name": "Arne Huschenbeth", "ShortName": "Arne"},
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -44,6 +47,10 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(
             [(creator.name, creator.short_name, creator.label) for creator in config.aetherhub_creators],
             [("MTGMalone", "Malone", "Malone")],
+        )
+        self.assertEqual(
+            [(creator.name, creator.short_name, creator.label) for creator in config.tcgplayer_creators],
+            [("Arne Huschenbeth", "Arne", "Arne")],
         )
 
 
