@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
 from mtga_deck_downloader.models import DeckEntry, MatchFormat
-from mtga_deck_downloader.scrapers.common import ScrapeError, create_session
+from mtga_deck_downloader.scrapers.common import ScrapeError, create_session, decode_response_text
 
 
 class MagicGGScraper:
@@ -93,7 +93,7 @@ class MagicGGScraper:
     def _get_text(self, url: str) -> str:
         response = self._session.get(url, timeout=20)
         response.raise_for_status()
-        return response.text
+        return decode_response_text(response)
 
     def _extract_article_urls(self, html: str) -> list[str]:
         soup = BeautifulSoup(html, "html.parser")

@@ -7,7 +7,7 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup, Tag
 
 from mtga_deck_downloader.models import DeckEntry, MatchFormat
-from mtga_deck_downloader.scrapers.common import ScrapeError
+from mtga_deck_downloader.scrapers.common import ScrapeError, decode_response_text
 
 
 class AetherhubScraper:
@@ -163,7 +163,7 @@ class AetherhubScraper:
     def _get_text(self, url: str) -> str:
         response = self._session.get(url, timeout=40)
         response.raise_for_status()
-        return response.text
+        return decode_response_text(response)
 
     def _parse_tournament_page(self, html: str, limit: int) -> list[DeckEntry]:
         soup = BeautifulSoup(html, "html.parser")

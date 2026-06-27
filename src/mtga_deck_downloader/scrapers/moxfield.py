@@ -5,7 +5,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from mtga_deck_downloader.models import DeckEntry
-from mtga_deck_downloader.scrapers.common import ScrapeError
+from mtga_deck_downloader.scrapers.common import ScrapeError, decode_response_text
 
 
 class MoxfieldScraper:
@@ -149,7 +149,7 @@ class MoxfieldScraper:
             timeout=30,
         )
         response.raise_for_status()
-        arena_text = response.text.strip()
+        arena_text = decode_response_text(response).strip()
         return arena_text or None
 
     @staticmethod

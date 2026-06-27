@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from mtga_deck_downloader.models import DeckEntry, MatchFormat
-from mtga_deck_downloader.scrapers.common import ScrapeError, create_session
+from mtga_deck_downloader.scrapers.common import ScrapeError, create_session, decode_response_text
 from mtga_deck_downloader.scrapers.untapped_deckstring import UntappedDeckstringDecoder
 
 
@@ -232,7 +232,7 @@ class UntappedScraper:
     def _extract_next_data_payload(self, url: str) -> dict:
         response = self._session.get(url, timeout=30)
         response.raise_for_status()
-        match = self.NEXT_DATA_RE.search(response.text)
+        match = self.NEXT_DATA_RE.search(decode_response_text(response))
         if not match:
             raise ScrapeError("Could not find __NEXT_DATA__ payload on Untapped page.")
         try:
