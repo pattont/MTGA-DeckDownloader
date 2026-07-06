@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from mtga_deck_downloader.models import DeckSource, MatchFormat
-from mtga_deck_downloader.ui import _split_creator_sources
+from mtga_deck_downloader.ui import _source_context_label, _split_creator_sources
 
 
 class UISourceTests(unittest.TestCase):
@@ -31,6 +31,12 @@ class UISourceTests(unittest.TestCase):
 
         self.assertEqual(regular_sources, [latest, events])
         self.assertEqual(creator_sources, [creator])
+
+    def test_source_context_label_uses_provider_item_label(self) -> None:
+        class FakeProvider:
+            source_picker_item_label = "section"
+
+        self.assertEqual(_source_context_label(FakeProvider()), "Section")
 
 
 if __name__ == "__main__":

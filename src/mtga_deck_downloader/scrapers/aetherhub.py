@@ -324,12 +324,23 @@ class AetherhubScraper:
         return results
 
     def fetch_deck_text(self, source_url: str) -> str | None:
-        deck_id = self._extract_deck_id(source_url)
-        if not deck_id:
-            deck_id = self._deck_id_cache.get(source_url, "")
-        if not deck_id:
-            deck_id = self._fetch_deck_id_from_page(source_url)
-        return self._fetch_mtga_deck_text(deck_id)
+        candidate_ids: list[str] = []
+        for deck_id in (
+            self._extract_deck_id(source_url),
+            self._deck_id_cache.get(source_url, ""),
+        ):
+            if deck_id and deck_id not in candidate_ids:
+                candidate_ids.append(deck_id)
+
+        for deck_id in candidate_ids:
+            deck_text = self._fetch_mtga_deck_text(deck_id)
+            if deck_text:
+                return deck_text
+
+        page_deck_id = self._fetch_deck_id_from_page(source_url)
+        if page_deck_id and page_deck_id not in candidate_ids:
+            return self._fetch_mtga_deck_text(page_deck_id)
+        return None
 
     def _fetch_mtga_deck_text(self, deck_id: str) -> str | None:
         if not deck_id:

@@ -368,7 +368,7 @@ def _show_deck_table(
         and title.endswith("Top Decks")
     )
     source_text = (
-        f"Source endpoint: [bold cyan]{selected_source.name}[/bold cyan]\n"
+        f"{_source_context_label(provider)}: [bold cyan]{selected_source.name}[/bold cyan]\n"
         if selected_source is not None
         else ""
     )
@@ -530,7 +530,7 @@ def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry)
     while True:
         raw = (
             console.input(
-                "\n[bold cyan]Enter=go back to list (Enter), q=quit[/bold cyan]: "
+                "\n[bold cyan]Press Enter to go back, q=quit[/bold cyan]: "
             )
             .strip()
             .lower()
@@ -731,7 +731,9 @@ def _pick_source(
     table.add_column("URL", overflow="fold")
 
     if not sources:
-        console.print("[yellow]No source endpoints match that format.[/yellow]")
+        console.print(
+            f"[yellow]No {_plural_source_item_label(provider)} match that format.[/yellow]"
+        )
         return "b"
 
     for idx, source in enumerate(regular_sources, start=1):
@@ -793,3 +795,14 @@ def _split_creator_sources(sources: list[DeckSource]) -> tuple[list[DeckSource],
     regular_sources = [source for source in sources if not source.name.startswith("Creator: ")]
     creator_sources = [source for source in sources if source.name.startswith("Creator: ")]
     return regular_sources, creator_sources
+
+
+def _source_context_label(provider: DeckProvider) -> str:
+    return provider.source_picker_item_label.strip().capitalize() or "Source"
+
+
+def _plural_source_item_label(provider: DeckProvider) -> str:
+    label = provider.source_picker_item_label.strip() or "source"
+    if label.endswith("s"):
+        return label
+    return f"{label}s"

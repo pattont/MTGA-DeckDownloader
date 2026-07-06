@@ -114,12 +114,17 @@ pip install -r requirements.txt
 python app.py
 ```
 
+For contributor setup, testing, and provider conventions, see
+[`DEVELOPMENT.md`](DEVELOPMENT.md). For module boundaries and runtime flow, see
+[`docs/architecture.md`](docs/architecture.md).
+
 ## Usage Controls
 
 Main results screen:
 
 - Enter a number to drill into the selected item.
-- `f` to change format.
+- `f` to change the current filter. Depending on the provider, this may be a
+  format, creator, or section.
 - `s` to change site.
 - `q` to quit.
 
@@ -131,9 +136,10 @@ Site selection screen:
 
 Source endpoint screen (multi-feed sites):
 
-- Enter endpoint/source number to fetch only that tab/feed/section.
+- Enter the listed endpoint, creator, or section number to fetch only that
+  tab/feed/source.
 - `a` to fetch all matching sources when that provider supports it.
-- `b` to go back to format selection.
+- `b` to go back to the previous picker.
 
 Variant screens:
 
@@ -173,6 +179,10 @@ src/
     config.py
     ui.py
     models.py
+docs/
+  architecture.md
+  future_installer.md
+DEVELOPMENT.md
 ```
 
 ## Add a New Source Provider
