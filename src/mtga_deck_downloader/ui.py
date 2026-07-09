@@ -39,16 +39,12 @@ def _render_site_header(console: Console) -> None:
     title.append("  |  ", style="dim")
     title.append("Deck Downloader", style="bold bright_yellow")
     
-    icons = Text("🟡 🔵 ⚫ 🔴 🟢")
+    icons = Text("🟡   🔵   ⚫   🔴   🟢")
 
-    subtitle = Text("Select a decklist source website to begin.", style="white")
-    scope = Text(
-        "Currently supports Standard BO1/BO3 sources, configurable Moxfield creators, and TCGPlayer Standard feeds.",
-        style="bold yellow",
-    )
+    subtitle = Text("Select a decklist source website to begin or hit Random to get a random deck from all the below sources.", style="white")
     console.print(
         Panel(
-            Text.assemble(title, "\n\n", icons, "\n\n", subtitle, "\n", scope),
+            Text.assemble(title, "\n\n", icons, "\n\n", subtitle),
             border_style="bright_black",
         )
     )
