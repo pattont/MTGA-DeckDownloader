@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup, Tag
@@ -140,13 +140,16 @@ class AetherhubScraper:
             formats = [selected_format]
 
         results: list[DeckEntry] = []
+        any_format_results: list[tuple[float, int, DeckEntry]] = []
         seen_urls: set[str] = set()
+        row_order = 0
         for match_format in formats:
             format_id = self.CREATOR_FORMAT_IDS.get(match_format)
             if format_id is None:
                 continue
             payload = self._fetch_user_deck_rows(user_id=user_id, format_id=format_id, length=limit)
             for row in payload:
+                row_order += 1
                 deck = self._parse_user_deck_row(
                     row=row,
                     creator_name=creator_name,
@@ -155,9 +158,21 @@ class AetherhubScraper:
                 if deck is None or deck.source_url in seen_urls:
                     continue
                 seen_urls.add(deck.source_url)
+                if selected_format is MatchFormat.ANY:
+                    any_format_results.append(
+                        (
+                            self._timestamp_millis(row.get("updatedhidden") or row.get("updated")),
+                            row_order,
+                            deck,
+                        )
+                    )
+                    continue
                 results.append(deck)
                 if len(results) >= limit:
                     return results[:limit]
+        if selected_format is MatchFormat.ANY:
+            any_format_results.sort(key=lambda item: (-item[0], item[1]))
+            return [deck for _, _, deck in any_format_results[:limit]]
         return results[:limit]
 
     def _get_text(self, url: str) -> str:
@@ -536,10 +551,21 @@ class AetherhubScraper:
     def _format_timestamp(value: object) -> str | None:
         if isinstance(value, (int, float)):
             try:
-                return datetime.utcfromtimestamp(float(value) / 1000.0).strftime("%m/%d/%Y")
+                return datetime.fromtimestamp(float(value) / 1000.0, UTC).strftime("%m/%d/%Y")
             except (ValueError, OSError):
                 return None
         return None
+
+    @staticmethod
+    def _timestamp_millis(value: object) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return 0
+        return 0
 
     @staticmethod
     def _user_format_label(row: dict[str, object], selected_format: MatchFormat) -> str:

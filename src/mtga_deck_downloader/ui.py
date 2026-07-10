@@ -381,8 +381,10 @@ def _show_deck_table(
 
     show_win_rate = any(deck.win_rate is not None for deck in decks)
     show_matches = any(deck.matches is not None for deck in decks)
-    show_player = any(deck.player_name is not None for deck in decks)
+    show_player = _show_player_column(provider, decks)
     show_placing = any(deck.placing is not None for deck in decks)
+    show_notes = _show_notes_column(provider)
+    date_column_label = _date_column_label(provider, selected_source, decks)
     is_magic_gg = provider.key == "magic_gg"
 
     table = Table(show_header=True, header_style="bold magenta", show_lines=True)
@@ -397,17 +399,21 @@ def _show_deck_table(
     if show_player:
         table.add_column("Player", overflow="fold", max_width=20)
     table.add_column("Format", no_wrap=True)
-    table.add_column(
-        "Event/Notes",
-        overflow="fold" if is_magic_gg else "ellipsis",
-        max_width=72 if is_magic_gg else 44,
-    )
+    if show_notes:
+        table.add_column(
+            _notes_column_label(provider),
+            overflow="fold" if is_magic_gg else "ellipsis",
+            max_width=72 if is_magic_gg else 44,
+        )
+    if date_column_label:
+        table.add_column(date_column_label, no_wrap=True)
 
     for idx, deck in enumerate(decks, start=1):
         note = _table_note(
             deck,
             truncate=not is_magic_gg,
             include_event_name=not suppress_event_names,
+            selected_source=selected_source,
         )
         row = [str(idx), deck.name]
         if show_win_rate:
@@ -418,7 +424,11 @@ def _show_deck_table(
             row.append(deck.placing or "-")
         if show_player:
             row.append(deck.player_name or "-")
-        row.extend([deck.format_label, note])
+        row.append(deck.format_label)
+        if show_notes:
+            row.append(note)
+        if date_column_label:
+            row.append(deck.event_date or "-")
         table.add_row(*row)
     console.print(table)
 
@@ -603,16 +613,104 @@ def _format_percent(value: float | None) -> str:
     return f"{value:.2f}%"
 
 
-def _table_note(deck: DeckEntry, truncate: bool, include_event_name: bool = True) -> str:
+def _show_player_column(provider: DeckProvider, decks: list[DeckEntry]) -> bool:
+    return provider.key != "tcgplayer" and any(deck.player_name is not None for deck in decks)
+
+
+def _notes_column_label(provider: DeckProvider) -> str:
+    if provider.key == "moxfield":
+        return "Updated"
+    return "Event/Notes"
+
+
+def _show_notes_column(provider: DeckProvider) -> bool:
+    return provider.key != "tcgplayer"
+
+
+def _date_column_label(
+    provider: DeckProvider,
+    selected_source: DeckSource | None,
+    decks: list[DeckEntry],
+) -> str | None:
+    if not any(deck.event_date for deck in decks):
+        return None
+    if provider.key == "aetherhub":
+        return "Posted"
+    if provider.key == "tcgplayer" and any(_note_value(deck.notes, "Created") for deck in decks):
+        return "Created"
+    return None
+
+
+def _show_posted_date_column(provider: DeckProvider, decks: list[DeckEntry]) -> bool:
+    return _date_column_label(provider, None, decks) == "Posted"
+
+
+def _table_note(
+    deck: DeckEntry,
+    truncate: bool,
+    include_event_name: bool = True,
+    selected_source: DeckSource | None = None,
+) -> str:
+    if _is_aetherhub_creator_source(deck, selected_source):
+        note = _aetherhub_creator_tags(deck.notes)
+        return _truncate(note, 42) if truncate else note
+    if deck.source_site == "moxfield.com":
+        return deck.event_date or _note_value(deck.notes, "Updated") or "-"
+
     note_parts: list[str] = []
     if include_event_name and deck.event_name:
         note_parts.append(deck.event_name)
     if deck.notes:
-        note_parts.append(deck.notes)
+        note_parts.extend(_display_note_parts(deck.notes, deck.source_site))
     if not note_parts:
         return "-"
     note = " | ".join(note_parts).replace("\n", " ").strip()
     return _truncate(note, 42) if truncate else note
+
+
+def _is_aetherhub_creator_source(deck: DeckEntry, selected_source: DeckSource | None) -> bool:
+    return (
+        deck.source_site == "aetherhub.com"
+        and selected_source is not None
+        and selected_source.name.startswith("Creator: ")
+    )
+
+
+def _aetherhub_creator_tags(notes: str | None) -> str:
+    if not notes:
+        return "-"
+    for part in notes.split("|"):
+        cleaned = part.strip()
+        if cleaned.startswith("Tags:"):
+            tags = cleaned.removeprefix("Tags:").strip()
+            return tags or "-"
+    return "-"
+
+
+def _display_note_parts(notes: str, source_site: str) -> list[str]:
+    values: list[str] = []
+    for part in notes.split("|"):
+        cleaned = part.strip()
+        if not cleaned:
+            continue
+        if source_site == "tcgplayer.com" and (
+            cleaned.startswith("Creator:") or cleaned.startswith("Created:")
+        ):
+            continue
+        values.append(cleaned)
+    return values
+
+
+def _note_value(notes: str | None, label: str) -> str | None:
+    if not notes:
+        return None
+    prefix = f"{label}:"
+    for part in notes.split("|"):
+        cleaned = part.strip()
+        if cleaned.startswith(prefix):
+            value = cleaned.removeprefix(prefix).strip()
+            return value or None
+    return None
 
 
 def _truncate(value: str, limit: int) -> str:

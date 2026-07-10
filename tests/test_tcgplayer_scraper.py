@@ -71,6 +71,7 @@ class TCGPlayerScraperTests(unittest.TestCase):
         self.assertEqual(decks[0].source_url, "https://www.tcgplayer.com/magic-the-gathering/deck/Jeskai-Lessons/546993")
         self.assertEqual(decks[0].format_label, "Standard")
         self.assertEqual(decks[0].player_name, "Arne Huschenbeth")
+        self.assertEqual(decks[0].event_date, "06/12/2026")
         self.assertEqual(decks[0].notes, "Created: 06/12/2026 | Creator: Arne Huschenbeth")
         self.assertEqual(
             scraper.requests,

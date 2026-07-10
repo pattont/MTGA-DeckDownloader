@@ -272,6 +272,7 @@ class TCGPlayerScraper:
             source_url=urljoin(self.BASE_URL, canonical),
             format_label=self._format_label(str(deck.get("format") or "standard")),
             player_name=self._clean_text(deck.get("playerName")),
+            event_date=created,
             notes=f"Created: {created}" if created else None,
         )
 

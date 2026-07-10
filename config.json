@@ -23,9 +23,12 @@
       "ShortName": "Malone"
     },
     {
+      "name": "ManaMan",
+      "short_name": "Mana"
+    },
+    {
       "name": "JayVillain",
       "short_name": "Jay"
-
     }
   ],
   "UntappedCreators": [
