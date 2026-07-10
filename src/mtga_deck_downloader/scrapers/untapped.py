@@ -174,14 +174,7 @@ class UntappedScraper:
             slug = self._slugify(archetype_name)
             source_url = self._build_archetype_url(archetype_id, slug, match_format)
 
-            notes_parts: list[str] = []
-            notes_parts.append(f"{variants_count} variant decks available.")
-            notes_parts.append("Select to view variant decklists and copy-ready MTGA text.")
-            if win_rate is None:
-                notes_parts.append(
-                    f"Win-rate is not exposed for {format_label} in this payload."
-                )
-            notes = " ".join(notes_parts)
+            notes = f"{variants_count} variant decks available."
 
             results.append(
                 DeckEntry(

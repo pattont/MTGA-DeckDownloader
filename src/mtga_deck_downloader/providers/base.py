@@ -13,6 +13,8 @@ class ResultViewConfig:
     name_column_label: str = "Deck"
     selection_label: str = "Deck"
     selection_action: str = "details"
+    helper_text: str | None = None
+    show_notes: bool | None = None
 
 
 class DeckProvider(ABC):
@@ -72,6 +74,10 @@ class DeckProvider(ABC):
 
     @property
     def allow_all_sources(self) -> bool:
+        return True
+
+    @property
+    def uses_source_picker(self) -> bool:
         return True
 
     @property

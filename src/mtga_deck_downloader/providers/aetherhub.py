@@ -15,9 +15,16 @@ class AetherhubProvider(DeckProvider):
     def __init__(self) -> None:
         self._scraper = AetherhubScraper()
 
+    def list_sources(self, selected_format: MatchFormat) -> list[DeckSource]:
+        return [
+            source
+            for source in self.sources
+            if source.supports(selected_format) and not self._is_creator_source(source)
+        ]
+
     @property
     def format_screen_sources(self) -> list[DeckSource]:
-        return [source for source in self.sources if source.name.startswith("Creator: ")]
+        return [source for source in self.sources if self._is_creator_source(source)]
 
     @property
     def sources(self) -> list[DeckSource]:
@@ -73,35 +80,12 @@ class AetherhubProvider(DeckProvider):
             )
 
         if source is None:
-            decks = self._scraper.fetch_decks(
+            source_urls = {source.url for source in self.list_sources(selected_format)}
+            return self._scraper.fetch_decks(
                 selected_format=selected_format,
                 limit=limit,
-                source_urls=None,
+                source_urls=source_urls,
             )
-            remaining = limit - len(decks)
-            if remaining <= 0:
-                return decks[:limit]
-            for creator_source in self.sources:
-                if remaining <= 0:
-                    break
-                if "/User/" not in creator_source.url or not creator_source.supports(selected_format):
-                    continue
-                creator_decks = self._scraper.fetch_creator_decks(
-                    creator_source.url,
-                    selected_format=selected_format,
-                    limit=remaining,
-                    creator_label=creator_source.name.removeprefix("Creator:").strip(),
-                )
-                seen_urls = {deck.source_url for deck in decks}
-                for deck in creator_decks:
-                    if deck.source_url in seen_urls:
-                        continue
-                    decks.append(deck)
-                    seen_urls.add(deck.source_url)
-                    remaining -= 1
-                    if remaining <= 0:
-                        break
-            return decks[:limit]
 
         source_urls = {source.url} if source is not None else None
         return self._scraper.fetch_decks(
@@ -140,6 +124,10 @@ class AetherhubProvider(DeckProvider):
                 name = cleaned.removeprefix("Creator:").strip()
                 return name or None
         return None
+
+    @staticmethod
+    def _is_creator_source(source: DeckSource) -> bool:
+        return source.name.startswith("Creator: ")
 
 
 PROVIDER_CLASS = AetherhubProvider

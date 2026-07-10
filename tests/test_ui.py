@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import unittest
 
+import mtga_deck_downloader.ui as ui_module
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.ui import (
     _date_column_label,
     _notes_column_label,
+    _pick_format,
+    _pick_provider,
     _show_player_column,
     _show_notes_column,
     _show_posted_date_column,
@@ -15,7 +18,64 @@ from mtga_deck_downloader.ui import (
 )
 
 
+class FakeConsole:
+    is_terminal = False
+
+    def clear(self) -> None:
+        return None
+
+    def print(self, *args: object, **kwargs: object) -> None:
+        return None
+
+
 class UISourceTests(unittest.TestCase):
+    def test_top_level_menu_has_quit_default(self) -> None:
+        class FakeProvider:
+            display_name = "Example"
+            description = "Example decks"
+
+        calls: list[dict[str, object]] = []
+        original_ask = ui_module.Prompt.ask
+
+        def fake_ask(prompt: str, **kwargs: object) -> str:
+            calls.append(kwargs)
+            return str(kwargs["default"])
+
+        ui_module.Prompt.ask = fake_ask
+        try:
+            selected = _pick_provider(FakeConsole(), [FakeProvider()])
+        finally:
+            ui_module.Prompt.ask = original_ask
+
+        self.assertIsNone(selected)
+        self.assertEqual(calls[0]["default"], "q")
+        self.assertFalse(calls[0]["show_choices"])
+
+    def test_format_menu_defaults_to_back(self) -> None:
+        class FakeProvider:
+            display_name = "untapped.gg"
+            description = "Arena archetypes"
+            homepage = "https://mtga.untapped.gg/constructed/standard/meta"
+            supported_formats = {MatchFormat.ANY, MatchFormat.BO1, MatchFormat.BO3}
+            format_screen_sources: list[DeckSource] = []
+
+        calls: list[dict[str, object]] = []
+        original_ask = ui_module.Prompt.ask
+
+        def fake_ask(prompt: str, **kwargs: object) -> str:
+            calls.append(kwargs)
+            return str(kwargs["default"])
+
+        ui_module.Prompt.ask = fake_ask
+        try:
+            selected = _pick_format(FakeConsole(), FakeProvider())
+        finally:
+            ui_module.Prompt.ask = original_ask
+
+        self.assertIsNone(selected)
+        self.assertEqual(calls[0]["default"], "b")
+        self.assertFalse(calls[0]["show_choices"])
+
     def test_split_creator_sources_keeps_creators_in_trailing_group(self) -> None:
         latest = DeckSource(
             name="Latest Decks",
@@ -147,6 +207,24 @@ class UISourceTests(unittest.TestCase):
         self.assertTrue(_show_notes_column(MoxfieldProvider()))
         self.assertIsNone(_date_column_label(MoxfieldProvider(), None, [deck]))
         self.assertEqual(_table_note(deck, truncate=False), "05/16/2026")
+
+    def test_magic_gg_ranked_decklists_use_date_column_and_hide_ranked_title(self) -> None:
+        class MagicGGProvider:
+            key = "magic_gg"
+
+        deck = DeckEntry(
+            name="Patchwork Beastie + Rapid Rescue",
+            source_site="magic.gg",
+            source_url="https://magic.gg/decklists/traditional-standard-ranked-decklists-july-6-2026",
+            format_label="Standard (Bo3)",
+            event_name="Traditional Standard Ranked Decklists: July 6, 2026",
+            event_date="July 6, 2026",
+            notes="Traditional (Bo3)",
+        )
+
+        self.assertFalse(_show_notes_column(MagicGGProvider()))
+        self.assertEqual(_date_column_label(MagicGGProvider(), None, [deck]), "Date")
+        self.assertEqual(_table_note(deck, truncate=False), "-")
 
 
 if __name__ == "__main__":

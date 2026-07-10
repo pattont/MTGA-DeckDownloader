@@ -148,16 +148,18 @@ def run_app() -> None:
                 selected_source = format_selection
             else:
                 selected_format = format_selection
-                selected_source = _pick_source(console, provider, selected_format)
-                if selected_source == "q":
-                    _clear_screen(console)
-                    console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
-                    return
-                if selected_source == "b":
-                    _clear_screen(console)
-                    if provider.supported_formats == {MatchFormat.ANY}:
-                        break
-                    continue
+                selected_source = None
+                if provider.uses_source_picker:
+                    selected_source = _pick_source(console, provider, selected_format)
+                    if selected_source == "q":
+                        _clear_screen(console)
+                        console.print("\n[bold]Exiting MTGA Deck Downloader.[/bold]")
+                        return
+                    if selected_source == "b":
+                        _clear_screen(console)
+                        if provider.supported_formats == {MatchFormat.ANY}:
+                            break
+                        continue
 
             decks = _fetch_decks(
                 console=console,
@@ -292,6 +294,8 @@ def _browse_decks(
             title=view_config.title,
             count_label=view_config.count_label,
             name_column_label=view_config.name_column_label,
+            helper_text=view_config.helper_text,
+            show_notes=view_config.show_notes,
         )
         prompt = (
             f"\n[bold cyan]{view_config.selection_label} # for {view_config.selection_action}, "
@@ -355,6 +359,8 @@ def _show_deck_table(
     title: str = "Scraped Deck Results",
     count_label: str = "Decks found",
     name_column_label: str = "Deck",
+    helper_text: str | None = None,
+    show_notes: bool | None = None,
 ) -> None:
     _clear_screen(console)
     suppress_event_names = (
@@ -368,12 +374,19 @@ def _show_deck_table(
         if selected_source is not None
         else ""
     )
+    summary_lines = [
+        f"[bold green]{provider.display_name}[/bold green]",
+        f"Format filter: [bold cyan]{selected_format.label}[/bold cyan]",
+    ]
+    if source_text:
+        summary_lines.append(source_text.rstrip("\n"))
+    summary_lines.append(f"{count_label}: [bold]{len(decks)}[/bold]")
+    if helper_text:
+        summary_lines.append(f"[dim]{helper_text}[/dim]")
+
     console.print(
         Panel(
-            f"[bold green]{provider.display_name}[/bold green]\n"
-            f"Format filter: [bold cyan]{selected_format.label}[/bold cyan]\n"
-            f"{source_text}"
-            f"{count_label}: [bold]{len(decks)}[/bold]",
+            "\n".join(summary_lines),
             title=title,
             border_style="cyan",
         )
@@ -383,7 +396,7 @@ def _show_deck_table(
     show_matches = any(deck.matches is not None for deck in decks)
     show_player = _show_player_column(provider, decks)
     show_placing = any(deck.placing is not None for deck in decks)
-    show_notes = _show_notes_column(provider)
+    show_notes = _show_notes_column(provider) if show_notes is None else show_notes
     date_column_label = _date_column_label(provider, selected_source, decks)
     is_magic_gg = provider.key == "magic_gg"
 
@@ -457,6 +470,8 @@ def _browse_variants(
             title=view_config.title,
             count_label=view_config.count_label,
             name_column_label=view_config.name_column_label,
+            helper_text=view_config.helper_text,
+            show_notes=view_config.show_notes,
         )
         raw = Prompt.ask(
             f"\n[bold cyan]{view_config.selection_label} # for {view_config.selection_action}, "
@@ -624,7 +639,7 @@ def _notes_column_label(provider: DeckProvider) -> str:
 
 
 def _show_notes_column(provider: DeckProvider) -> bool:
-    return provider.key != "tcgplayer"
+    return provider.key not in {"magic_gg", "tcgplayer"}
 
 
 def _date_column_label(
@@ -636,6 +651,8 @@ def _date_column_label(
         return None
     if provider.key == "aetherhub":
         return "Posted"
+    if provider.key == "magic_gg":
+        return "Date"
     if provider.key == "tcgplayer" and any(_note_value(deck.notes, "Created") for deck in decks):
         return "Created"
     return None
@@ -656,6 +673,8 @@ def _table_note(
         return _truncate(note, 42) if truncate else note
     if deck.source_site == "moxfield.com":
         return deck.event_date or _note_value(deck.notes, "Updated") or "-"
+    if deck.source_site == "magic.gg" and _is_magic_gg_ranked_decklist(deck.event_name):
+        return "-"
 
     note_parts: list[str] = []
     if include_event_name and deck.event_name:
@@ -713,6 +732,11 @@ def _note_value(notes: str | None, label: str) -> str | None:
     return None
 
 
+def _is_magic_gg_ranked_decklist(event_name: str | None) -> bool:
+    lowered = (event_name or "").lower()
+    return "standard ranked decklists" in lowered
+
+
 def _truncate(value: str, limit: int) -> str:
     value = value.strip()
     if len(value) <= limit:
@@ -735,8 +759,10 @@ def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvi
 
         console.print(table)
         raw = Prompt.ask(
-            "\n[bold cyan]Select site number, r=random deck (or q to quit)[/bold cyan]"
-        )
+            "\n[bold cyan]Select site number, r=random deck, q=quit[/bold cyan]",
+            default="q",
+            show_choices=False,
+        ).strip()
         if raw.lower() == "q":
             return None
         if raw.lower() == "r":
@@ -783,8 +809,10 @@ def _pick_format(console: Console, provider: DeckProvider) -> MatchFormat | Deck
             console.print(creator_table)
 
         raw = Prompt.ask(
-            "\n[bold cyan]Select format or creator (or b to go back, q to quit)[/bold cyan]"
-        )
+            "\n[bold cyan]Select format or creator, b=back, q=quit[/bold cyan]",
+            default="b",
+            show_choices=False,
+        ).strip()
         if raw.lower() == "q":
             return "q"
         if raw.lower() == "b":

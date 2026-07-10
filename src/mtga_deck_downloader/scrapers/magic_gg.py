@@ -164,7 +164,11 @@ class MagicGGScraper:
             companion_lines = self._get_section_lines(deck_tag, "companion-card")
             deck_text = self._build_arena_text(main_lines, side_lines, companion_lines)
 
-            format_label = game_format if game_format else detected_format.label
+            format_label = self._format_label(
+                game_format=game_format,
+                detected_format=detected_format,
+                event_name=event_name,
+            )
 
             results.append(
                 DeckEntry(
@@ -188,6 +192,21 @@ class MagicGGScraper:
             return "Magic.gg Decklist"
         text = title.get_text(strip=True)
         return text if text else "Magic.gg Decklist"
+
+    @staticmethod
+    def _format_label(
+        game_format: str,
+        detected_format: MatchFormat,
+        event_name: str,
+    ) -> str:
+        normalized_format = " ".join((game_format or "").split())
+        lowered = " ".join([normalized_format, event_name]).lower()
+        if normalized_format.lower() == "standard":
+            if "traditional" in lowered or detected_format is MatchFormat.BO3:
+                return "Standard (Bo3)"
+            if detected_format is MatchFormat.BO1:
+                return "Standard (Bo1)"
+        return normalized_format if normalized_format else detected_format.label
 
     def _compose_deck_name(
         self,

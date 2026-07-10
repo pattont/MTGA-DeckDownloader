@@ -7,7 +7,7 @@ from mtga_deck_downloader.scrapers.untapped import UntappedScraper
 
 class UntappedProvider(DeckProvider):
     key = "untapped"
-    display_name = "mtga.untapped.gg"
+    display_name = "untapped.gg"
     description = "Arena archetypes with win-rate data and variant decklists."
     homepage = "https://mtga.untapped.gg/constructed/standard/meta"
 
@@ -30,6 +30,10 @@ class UntappedProvider(DeckProvider):
                 formats=(MatchFormat.BO3,),
             ),
         ]
+
+    @property
+    def uses_source_picker(self) -> bool:
+        return False
 
     def fetch_decks(
         self,
@@ -77,12 +81,14 @@ class UntappedProvider(DeckProvider):
             return ResultViewConfig(
                 title=f"{parent.name} Variants",
                 count_label="Deck variants",
+                show_notes=False,
             )
         return ResultViewConfig(
             count_label="Archetypes found",
             name_column_label="Archetype",
             selection_label="Archetype",
             selection_action="variants",
+            helper_text="Select deck below to view variants of the deck",
         )
 
 
