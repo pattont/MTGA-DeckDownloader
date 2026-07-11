@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import importlib.util
+from pickle import FALSE
 import random
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from rich.console import Console
+from rich.align import Align
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
@@ -19,6 +21,52 @@ from mtga_deck_downloader.providers.registry import LAST_PROVIDER_ERRORS, load_p
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
+
+MTGA_COLOSSAL_LOGO = r'''888b     d888                d8b              88888888888888                 .d8888b.         888   888                    d8b                          d8888
+8888b   d8888                Y8P                  888    888                d88P  Y88b        888   888                    Y8P                         d88888
+88888b.d88888                                     888    888                888    888        888   888                                               d88P888
+888Y88888P888 8888b.  .d88b. 888 .d8888bd8b       888    88888b.  .d88b.    888        8888b. 88888888888b.  .d88b. 888d88888888888b.  .d88b.        d88P 888888d888 .d88b. 88888b.  8888b.
+888 Y888P 888    "88bd88P"88b888d88P"   Y8P       888    888 "88bd8P  Y8b   888  88888    "88b888   888 "88bd8P  Y8b888P"  888888 "88bd88P"88b      d88P  888888P"  d8P  Y8b888 "88b    "88b
+888  Y8P  888.d888888888  888888888               888    888  88888888888   888    888.d888888888   888  88888888888888    888888  888888  888     d88P   888888    88888888888  888.d888888
+888   "   888888  888Y88b 888888Y88b.   d8b       888    888  888Y8b.       Y88b  d88P888  888Y88b. 888  888Y8b.    888    888888  888Y88b 888    d8888888888888    Y8b.    888  888888  888
+888       888"Y888888 "Y88888888 "Y8888PY8P       888    888  888 "Y8888     "Y8888P88"Y888888 "Y888888  888 "Y8888 888    888888  888 "Y88888   d88P     888888     "Y8888 888  888"Y888888
+                          888                                                                                                              888
+                     Y8b d88P                                                                                                         Y8b d88P
+                      "Y88P"                                                                                                           "Y88P"'''
+
+_COMPACT_MAGIC = (
+    " __  __           _",
+    "|  \\/  |__ _ __ _(_)__",
+    "| |\\/| / _` / _` | / _|",
+    "|_|  |_\\__,_\\__, |_\\__|",
+    "            |___/",
+)
+_COMPACT_THE_GATHERING = (
+    " _____ _           ___      _   _            _",
+    "|_   _| |_  ___   / __|__ _| |_| |_  ___ _ _(_)_ _  __ _",
+    "  | | | ' \\/ -_) | (_ / _` |  _| ' \\/ -_) '_| | ' \\/ _` |",
+    "  |_| |_||_\\___|  \\___\\__,_|\\__|_||_\\___|_| |_|_||_\\__, |",
+    "                                                   |___/",
+)
+_COMPACT_ARENA = (
+    "   _",
+    "  /_\\  _ _ ___ _ _  __ _",
+    " / _ \\| '_/ -_) ' \\/ _` |",
+    "/_/ \\_\\_| \\___|_||_\\__,_|",
+    "",
+)
+_COMPACT_MAGIC_WIDTH = max(len(line) for line in _COMPACT_MAGIC)
+_COMPACT_THE_GATHERING_WIDTH = max(len(line) for line in _COMPACT_THE_GATHERING)
+MTGA_COMPACT_LOGO = "\n".join(
+    f"{magic.ljust(_COMPACT_MAGIC_WIDTH)}{':' if index in {1, 3} else ' '}  "
+    f"{gathering.ljust(_COMPACT_THE_GATHERING_WIDTH)}   {arena}"
+    for index, (magic, gathering, arena) in enumerate(
+        zip(_COMPACT_MAGIC, _COMPACT_THE_GATHERING, _COMPACT_ARENA)
+    )
+)
+
+COMPACT_LOGO_MIN_WIDTH = 120
+COLOSSAL_LOGO_MIN_WIDTH = 198
 
 
 def _clear_screen(console: Console) -> None:
@@ -33,19 +81,33 @@ def _clear_screen(console: Console) -> None:
 
 
 def _render_site_header(console: Console) -> None:
-    title = Text()
-    title.append("Magic: ", style="bold white")
-    title.append("The Gathering Arena", style="bold white")
-    title.append("  |  ", style="dim")
-    title.append("Deck Downloader", style="bold bright_yellow")
-    
-    icons = Text("🟡   🔵   ⚫   🔴   🟢")
+    width = getattr(console, "width", 80)
+    if width >= COLOSSAL_LOGO_MIN_WIDTH:
+        logo = Text(MTGA_COLOSSAL_LOGO, style="bold bright_white")
+    elif width >= COMPACT_LOGO_MIN_WIDTH:
+        logo = Text(MTGA_COMPACT_LOGO, style="bold bright_white")
+    else:
+        logo = Text("Magic: The Gathering Arena", style="bold bright_white")
 
-    subtitle = Text("Select a decklist source website to begin or hit Random to get a random deck from all the below sources.", style="white")
+    header = Group(
+        Align.center(logo),
+        Align.center(Text("DECK FINDER & DOWNLOADER", style="bold bright_yellow")),
+        Text(),
+        Align.center(Text("🟡   🔵   ⚫   🔴   🟢")),
+        Text(),
+        Align.center(
+            Text(
+                "Select a decklist source website or choose random to get a random "
+                "deck from all available sites / creators.",
+                style="white",
+            )
+        ),
+    )
     console.print(
         Panel(
-            Text.assemble(title, "\n\n", icons, "\n\n", subtitle),
-            border_style="bright_black",
+            header,
+            border_style="bright_yellow",
+            padding=(1, 3),
         )
     )
 
@@ -749,17 +811,26 @@ def _pick_provider(console: Console, providers: list[DeckProvider]) -> DeckProvi
         _clear_screen(console)
         _render_site_header(console)
 
-        table = Table(show_header=True, header_style="bold magenta")
+        table = Table(
+            show_header=True,
+            header_style="bold magenta",
+            padding=(0, 1),
+        )
         table.add_column("#", justify="right", style="bold")
         table.add_column("Site", style="bold green")
         table.add_column("Description")
 
         for idx, provider in enumerate(providers, start=1):
-            table.add_row(str(idx), provider.display_name, provider.description)
+            table.add_row(
+                f"\n{idx}\n",
+                f"\n{provider.display_name}\n",
+                f"\n{provider.description}\n",
+            )
 
         console.print(table)
+
         raw = Prompt.ask(
-            "\n[bold cyan]Select site number, r=random deck, q=quit[/bold cyan]",
+            "\n[bold cyan]Select site number, r=random deck from all sites / creators, q=quit[/bold cyan]",
             default="q",
             show_choices=False,
         ).strip()

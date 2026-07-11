@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import io
 import unittest
+
+from rich.console import Console
 
 import mtga_deck_downloader.ui as ui_module
 from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
@@ -50,6 +53,116 @@ class UISourceTests(unittest.TestCase):
         self.assertIsNone(selected)
         self.assertEqual(calls[0]["default"], "q")
         self.assertFalse(calls[0]["show_choices"])
+
+    def test_top_level_menu_has_compact_header_and_spaced_site_rows(self) -> None:
+        class FakeProvider:
+            display_name = "Example"
+            description = "Example decks"
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False, width=100)
+        original_ask = ui_module.Prompt.ask
+
+        def fake_ask(prompt: str, **kwargs: object) -> str:
+            return "q"
+
+        ui_module.Prompt.ask = fake_ask
+        try:
+            _pick_provider(console, [FakeProvider()])
+        finally:
+            ui_module.Prompt.ask = original_ask
+
+        rendered = output.getvalue()
+        lines = rendered.splitlines()
+        table_header_index = next(
+            index
+            for index, line in enumerate(lines)
+            if "Site" in line and "Description" in line
+        )
+        site_row_index = next(
+            index for index, line in enumerate(lines) if "Example decks" in line
+        )
+
+        self.assertIn("Magic: The Gathering Arena", rendered)
+        self.assertIn("DECK FINDER & DOWNLOADER", rendered)
+        self.assertIn("Example", rendered)
+        self.assertTrue(lines[table_header_index - 1].startswith("┏"))
+        self.assertTrue(lines[table_header_index + 1].startswith("┡"))
+        self.assertNotIn("Example", lines[site_row_index - 1])
+        self.assertNotIn("Example", lines[site_row_index + 1])
+
+    def test_wide_top_level_menu_uses_ascii_logo(self) -> None:
+        class FakeProvider:
+            display_name = "Example"
+            description = "Example decks"
+
+        output = io.StringIO()
+        console = Console(file=output, force_terminal=False, width=140)
+        original_ask = ui_module.Prompt.ask
+
+        def fake_ask(prompt: str, **kwargs: object) -> str:
+            return "q"
+
+        ui_module.Prompt.ask = fake_ask
+        try:
+            _pick_provider(console, [FakeProvider()])
+        finally:
+            ui_module.Prompt.ask = original_ask
+
+        rendered = output.getvalue()
+        self.assertIn("|  \\/  |__ _ __", rendered)
+        self.assertIn("DECK FINDER & DOWNLOADER", rendered)
+
+    def test_logo_selection_uses_responsive_width_boundaries(self) -> None:
+        cases = (
+            (119, True, False, False),
+            (120, False, True, False),
+            (197, False, True, False),
+            (198, False, False, True),
+            (200, False, False, True),
+        )
+
+        for width, has_plain, has_compact, has_colossal in cases:
+            with self.subTest(width=width):
+                output = io.StringIO()
+                console = Console(file=output, force_terminal=False, width=width)
+
+                ui_module._render_site_header(console)
+
+                rendered = output.getvalue()
+                self.assertEqual("Magic: The Gathering Arena" in rendered, has_plain)
+                self.assertEqual("|  \\/  |__ _ __" in rendered, has_compact)
+                self.assertEqual("888b     d888" in rendered, has_colossal)
+
+    def test_compact_logo_has_distinct_colon_and_arena_spacing(self) -> None:
+        lines = ui_module.MTGA_COMPACT_LOGO.splitlines()
+        colon_column = ui_module._COMPACT_MAGIC_WIDTH
+        arena_column = (
+            colon_column
+            + 1
+            + 2
+            + ui_module._COMPACT_THE_GATHERING_WIDTH
+            + 3
+        )
+
+        self.assertEqual(
+            [line[colon_column] for line in lines],
+            [" ", ":", " ", ":", " "],
+        )
+        for line, arena_line in zip(lines, ui_module._COMPACT_ARENA):
+            self.assertEqual(line[arena_column:].rstrip(), arena_line)
+
+    def test_embedded_logos_fit_inside_their_minimum_widths(self) -> None:
+        panel_overhead = 8
+
+        self.assertLessEqual(
+            max(len(line) for line in ui_module.MTGA_COMPACT_LOGO.splitlines()),
+            ui_module.COMPACT_LOGO_MIN_WIDTH - panel_overhead,
+        )
+        self.assertLessEqual(
+            max(len(line) for line in ui_module.MTGA_COLOSSAL_LOGO.splitlines()),
+            ui_module.COLOSSAL_LOGO_MIN_WIDTH - panel_overhead,
+        )
 
     def test_format_menu_defaults_to_back(self) -> None:
         class FakeProvider:
