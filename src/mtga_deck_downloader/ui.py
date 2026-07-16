@@ -67,6 +67,7 @@ MTGA_COMPACT_LOGO = "\n".join(
 
 COMPACT_LOGO_MIN_WIDTH = 120
 COLOSSAL_LOGO_MIN_WIDTH = 198
+DECK_PAGE_SIZE = 20
 
 
 def _clear_screen(console: Console) -> None:
@@ -346,22 +347,30 @@ def _browse_decks(
 ) -> str:
     view_config = provider.result_view_config(selected_source)
     change_label = provider.change_label
+    page_index = 0
     while True:
+        page_decks, page_index, start_index, page_count = _deck_page(decks, page_index)
         _show_deck_table(
             console,
             provider,
             selected_format,
-            decks,
+            page_decks,
             selected_source=selected_source,
             title=view_config.title,
             count_label=view_config.count_label,
             name_column_label=view_config.name_column_label,
             helper_text=view_config.helper_text,
             show_notes=view_config.show_notes,
+            all_decks=decks,
+            start_index=start_index,
+            page_number=page_index + 1,
+            page_count=page_count,
         )
+        page_actions = _page_prompt_actions(page_index, page_count)
+        navigation = f", {', '.join(page_actions)}" if page_actions else ""
         prompt = (
             f"\n[bold cyan]{view_config.selection_label} # for {view_config.selection_action}, "
-            f"f={change_label}, s=site, q=quit[/bold cyan]"
+            f"f={change_label}, s=site{navigation}, q=quit[/bold cyan]"
         )
         raw = Prompt.ask(
             prompt,
@@ -369,11 +378,17 @@ def _browse_decks(
             show_choices=False,
         ).strip()
         lowered = raw.lower()
+        if lowered == "n" and page_index + 1 < page_count:
+            page_index += 1
+            continue
+        if lowered == "p" and page_index > 0:
+            page_index -= 1
+            continue
         if lowered in {"f", "s", "q"}:
             return lowered
         if raw.isdigit():
             index = int(raw)
-            if 1 <= index <= len(decks):
+            if start_index <= index < start_index + len(page_decks):
                 selected = decks[index - 1]
                 try:
                     _clear_screen(console)
@@ -409,7 +424,29 @@ def _browse_decks(
                     return "q"
                 decks[index - 1] = detailed_deck
                 continue
-        console.print("[yellow]Invalid input. Enter a deck number, f, s, or q.[/yellow]")
+        valid_actions = ["a visible deck number", *page_actions, "f", "s", "q"]
+        console.print(
+            f"[yellow]Invalid input. Enter {', '.join(valid_actions)}.[/yellow]"
+        )
+
+
+def _deck_page(
+    decks: list[DeckEntry],
+    page_index: int,
+) -> tuple[list[DeckEntry], int, int, int]:
+    page_count = max(1, (len(decks) + DECK_PAGE_SIZE - 1) // DECK_PAGE_SIZE)
+    page_index = min(max(page_index, 0), page_count - 1)
+    start = page_index * DECK_PAGE_SIZE
+    return decks[start : start + DECK_PAGE_SIZE], page_index, start + 1, page_count
+
+
+def _page_prompt_actions(page_index: int, page_count: int) -> list[str]:
+    actions: list[str] = []
+    if page_index > 0:
+        actions.append("p=previous page")
+    if page_index + 1 < page_count:
+        actions.append("n=next page")
+    return actions
 
 
 def _show_deck_table(
@@ -423,8 +460,13 @@ def _show_deck_table(
     name_column_label: str = "Deck",
     helper_text: str | None = None,
     show_notes: bool | None = None,
+    all_decks: list[DeckEntry] | None = None,
+    start_index: int = 1,
+    page_number: int = 1,
+    page_count: int = 1,
 ) -> None:
     _clear_screen(console)
+    column_decks = all_decks if all_decks is not None else decks
     suppress_event_names = (
         provider.key == "tcgplayer"
         and selected_source is not None
@@ -442,7 +484,9 @@ def _show_deck_table(
     ]
     if source_text:
         summary_lines.append(source_text.rstrip("\n"))
-    summary_lines.append(f"{count_label}: [bold]{len(decks)}[/bold]")
+    summary_lines.append(f"{count_label}: [bold]{len(column_decks)}[/bold]")
+    if page_count > 1:
+        summary_lines.append(f"Page: [bold]{page_number} of {page_count}[/bold]")
     if helper_text:
         summary_lines.append(f"[dim]{helper_text}[/dim]")
 
@@ -454,12 +498,12 @@ def _show_deck_table(
         )
     )
 
-    show_win_rate = any(deck.win_rate is not None for deck in decks)
-    show_matches = any(deck.matches is not None for deck in decks)
-    show_player = _show_player_column(provider, decks)
-    show_placing = any(deck.placing is not None for deck in decks)
+    show_win_rate = any(deck.win_rate is not None for deck in column_decks)
+    show_matches = any(deck.matches is not None for deck in column_decks)
+    show_player = _show_player_column(provider, column_decks)
+    show_placing = any(deck.placing is not None for deck in column_decks)
     show_notes = _show_notes_column(provider) if show_notes is None else show_notes
-    date_column_label = _date_column_label(provider, selected_source, decks)
+    date_column_label = _date_column_label(provider, selected_source, column_decks)
     is_magic_gg = provider.key == "magic_gg"
 
     table = Table(show_header=True, header_style="bold magenta", show_lines=True)
@@ -483,7 +527,7 @@ def _show_deck_table(
     if date_column_label:
         table.add_column(date_column_label, no_wrap=True)
 
-    for idx, deck in enumerate(decks, start=1):
+    for idx, deck in enumerate(decks, start=start_index):
         note = _table_note(
             deck,
             truncate=not is_magic_gg,
@@ -522,37 +566,57 @@ def _browse_variants(
         parent=archetype,
     )
     change_label = provider.change_label
+    page_index = 0
     while True:
+        page_variants, page_index, start_index, page_count = _deck_page(
+            variants,
+            page_index,
+        )
         _show_deck_table(
             console=console,
             provider=provider,
             selected_format=selected_format,
-            decks=variants,
+            decks=page_variants,
             selected_source=selected_source,
             title=view_config.title,
             count_label=view_config.count_label,
             name_column_label=view_config.name_column_label,
             helper_text=view_config.helper_text,
             show_notes=view_config.show_notes,
+            all_decks=variants,
+            start_index=start_index,
+            page_number=page_index + 1,
+            page_count=page_count,
         )
+        page_actions = _page_prompt_actions(page_index, page_count)
+        navigation = f", {', '.join(page_actions)}" if page_actions else ""
         raw = Prompt.ask(
             f"\n[bold cyan]{view_config.selection_label} # for {view_config.selection_action}, "
-            f"b=back, f={change_label}, s=site, q=quit[/bold cyan]",
+            f"b=back, f={change_label}, s=site{navigation}, q=quit[/bold cyan]",
             default="b",
             show_choices=False,
         ).strip()
         lowered = raw.lower()
+        if lowered == "n" and page_index + 1 < page_count:
+            page_index += 1
+            continue
+        if lowered == "p" and page_index > 0:
+            page_index -= 1
+            continue
         if lowered in {"b", "f", "s", "q"}:
             return lowered
         if raw.isdigit():
             index = int(raw)
-            if 1 <= index <= len(variants):
+            if start_index <= index < start_index + len(page_variants):
                 detailed_deck = _show_deck_detail(console, provider, variants[index - 1])
                 if detailed_deck == "q":
                     return "q"
                 variants[index - 1] = detailed_deck
                 continue
-        console.print("[yellow]Invalid input. Enter a deck number, b, f, s, or q.[/yellow]")
+        valid_actions = ["a visible deck number", *page_actions, "b", "f", "s", "q"]
+        console.print(
+            f"[yellow]Invalid input. Enter {', '.join(valid_actions)}.[/yellow]"
+        )
 
 
 def _show_deck_detail(console: Console, provider: DeckProvider, deck: DeckEntry) -> DeckEntry | str:

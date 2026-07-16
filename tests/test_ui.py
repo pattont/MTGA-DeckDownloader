@@ -164,6 +164,134 @@ class UISourceTests(unittest.TestCase):
             ui_module.COLOSSAL_LOGO_MIN_WIDTH - panel_overhead,
         )
 
+    def test_deck_pages_have_at_most_twenty_rows(self) -> None:
+        decks = [
+            DeckEntry(
+                name=f"Deck {index}",
+                source_site="example.test",
+                source_url=f"https://example.test/{index}",
+                format_label="Standard",
+            )
+            for index in range(1, 51)
+        ]
+
+        first, first_page, first_start, page_count = ui_module._deck_page(decks, 0)
+        second, second_page, second_start, _ = ui_module._deck_page(decks, 1)
+        third, third_page, third_start, _ = ui_module._deck_page(decks, 2)
+
+        self.assertEqual([len(first), len(second), len(third)], [20, 20, 10])
+        self.assertEqual([first_page, second_page, third_page], [0, 1, 2])
+        self.assertEqual([first_start, second_start, third_start], [1, 21, 41])
+        self.assertEqual(page_count, 3)
+
+    def test_deck_browser_navigates_between_twenty_row_pages(self) -> None:
+        class FakeProvider:
+            change_label = "format"
+
+            def result_view_config(self, *args: object, **kwargs: object) -> object:
+                return ui_module.ResultViewConfig()
+
+        decks = [
+            DeckEntry(
+                name=f"Deck {index}",
+                source_site="example.test",
+                source_url=f"https://example.test/{index}",
+                format_label="Standard",
+            )
+            for index in range(1, 51)
+        ]
+        responses = iter(("n", "n", "f"))
+        rendered_pages: list[tuple[int, int, int, int]] = []
+        prompts: list[str] = []
+        original_ask = ui_module.Prompt.ask
+        original_show = ui_module._show_deck_table
+
+        def fake_ask(prompt: str, **kwargs: object) -> str:
+            prompts.append(prompt)
+            return next(responses)
+
+        def fake_show(*args: object, **kwargs: object) -> None:
+            visible_decks = args[3]
+            rendered_pages.append(
+                (
+                    len(visible_decks),
+                    int(kwargs["start_index"]),
+                    int(kwargs["page_number"]),
+                    int(kwargs["page_count"]),
+                )
+            )
+
+        ui_module.Prompt.ask = fake_ask
+        ui_module._show_deck_table = fake_show
+        try:
+            action = ui_module._browse_decks(
+                FakeConsole(),
+                FakeProvider(),
+                MatchFormat.ANY,
+                decks,
+            )
+        finally:
+            ui_module.Prompt.ask = original_ask
+            ui_module._show_deck_table = original_show
+
+        self.assertEqual(action, "f")
+        self.assertEqual(
+            rendered_pages,
+            [(20, 1, 1, 3), (20, 21, 2, 3), (10, 41, 3, 3)],
+        )
+        self.assertIn("n=next page", prompts[0])
+        self.assertNotIn("p=previous page", prompts[0])
+        self.assertIn("p=previous page", prompts[1])
+        self.assertIn("n=next page", prompts[1])
+        self.assertIn("p=previous page", prompts[2])
+        self.assertNotIn("n=next page", prompts[2])
+
+    def test_variant_browser_uses_the_same_pagination(self) -> None:
+        class FakeProvider:
+            change_label = "format"
+
+            def result_view_config(self, *args: object, **kwargs: object) -> object:
+                return ui_module.ResultViewConfig()
+
+        variants = [
+            DeckEntry(
+                name=f"Variant {index}",
+                source_site="example.test",
+                source_url=f"https://example.test/{index}",
+                format_label="Standard",
+            )
+            for index in range(1, 26)
+        ]
+        responses = iter(("n", "b"))
+        rendered_pages: list[tuple[int, int]] = []
+        original_ask = ui_module.Prompt.ask
+        original_show = ui_module._show_deck_table
+
+        def fake_ask(prompt: str, **kwargs: object) -> str:
+            return next(responses)
+
+        def fake_show(*args: object, **kwargs: object) -> None:
+            rendered_pages.append(
+                (len(kwargs["decks"]), int(kwargs["start_index"]))
+            )
+
+        ui_module.Prompt.ask = fake_ask
+        ui_module._show_deck_table = fake_show
+        try:
+            action = ui_module._browse_variants(
+                FakeConsole(),
+                FakeProvider(),
+                MatchFormat.ANY,
+                variants[0],
+                variants,
+            )
+        finally:
+            ui_module.Prompt.ask = original_ask
+            ui_module._show_deck_table = original_show
+
+        self.assertEqual(action, "b")
+        self.assertEqual(rendered_pages, [(20, 1), (5, 21)])
+
     def test_format_menu_defaults_to_back(self) -> None:
         class FakeProvider:
             display_name = "untapped.gg"
