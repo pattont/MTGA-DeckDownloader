@@ -71,6 +71,21 @@ Dependencies are listed in `requirements.txt`:
 - `beautifulsoup4`
 - `cloudscraper`
 
+## Installers
+
+Windows and macOS installers are built automatically by GitHub Actions. Each
+release contains:
+
+- A Windows x64 setup executable.
+- A macOS DMG for Apple Silicon.
+- A macOS DMG for Intel Macs.
+
+The installed application includes Python and all runtime dependencies. Build
+and release instructions are in
+[`docs/releasing.md`](docs/releasing.md).
+Published downloads will be available from the
+[GitHub Releases page](https://github.com/pattont/MTGA-DeckDownloader/releases).
+
 ## Config
 
 The repo root contains `config.json`. Creator profiles are configured here:
@@ -112,6 +127,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
+```
+
+The project can also be installed as a normal Python package:
+
+```bash
+pip install -e .
+mtga-deck-downloader
 ```
 
 For contributor setup, testing, and provider conventions, see

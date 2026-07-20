@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-from pickle import FALSE
 import random
 import shutil
 import subprocess
@@ -19,7 +18,7 @@ from mtga_deck_downloader.models import DeckEntry, DeckSource, MatchFormat
 from mtga_deck_downloader.providers.base import DeckProvider, ResultViewConfig
 from mtga_deck_downloader.providers.registry import LAST_PROVIDER_ERRORS, load_providers
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS_PATH = REPO_ROOT / "requirements.txt"
 
 MTGA_COLOSSAL_LOGO = r'''888b     d888                d8b              88888888888888                 .d8888b.         888   888                    d8b                          d8888
@@ -127,19 +126,38 @@ def _missing_runtime_modules() -> list[str]:
 
 
 def _render_dependency_error(console: Console, missing_packages: list[str]) -> None:
-    install_cmd = f"{sys.executable} -m pip install -r {REQUIREMENTS_PATH}"
     lines = [
-        "[bold red]Missing Python dependencies for this interpreter.[/bold red]",
+        "[bold red]Required application components are missing.[/bold red]",
         "",
-        f"[bold]Python:[/bold] {sys.executable}",
         f"[bold]Missing:[/bold] {', '.join(missing_packages)}",
-        "",
-        "[bold]Fix:[/bold]",
-        install_cmd,
     ]
 
+    if getattr(sys, "frozen", False):
+        lines.extend(
+            [
+                "",
+                "[bold]Fix:[/bold] Reinstall MTGA Deck Downloader from its official release.",
+                f"[bold]Executable:[/bold] {sys.executable}",
+            ]
+        )
+    else:
+        install_cmd = f"{sys.executable} -m pip install -r {REQUIREMENTS_PATH}"
+        lines.extend(
+            [
+                "",
+                f"[bold]Python:[/bold] {sys.executable}",
+                "",
+                "[bold]Fix:[/bold]",
+                install_cmd,
+            ]
+        )
+
     venv_python = REPO_ROOT / ".venv" / "bin" / "python"
-    if venv_python.exists() and Path(sys.executable) != venv_python:
+    if (
+        not getattr(sys, "frozen", False)
+        and venv_python.exists()
+        and Path(sys.executable) != venv_python
+    ):
         lines.extend(
             [
                 "",

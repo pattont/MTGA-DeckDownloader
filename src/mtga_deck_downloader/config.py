@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
+import sys
 
 
 DEFAULT_MOXFIELD_NAMES = (
@@ -16,7 +18,45 @@ DEFAULT_AETHERHUB_CREATORS = (
     "MTGMalone",
 )
 
-CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.json"
+BUNDLED_CONFIG_PATH = Path(__file__).resolve().with_name("default_config.json")
+PROJECT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.json"
+CONFIG_ENV_VAR = "MTGA_DECK_DOWNLOADER_CONFIG"
+
+
+def user_config_path() -> Path:
+    if sys.platform == "darwin":
+        return (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "MTGA Deck Downloader"
+            / "config.json"
+        )
+    if sys.platform.startswith("win"):
+        app_data = os.environ.get("APPDATA")
+        base = Path(app_data) if app_data else Path.home() / "AppData" / "Roaming"
+        return base / "MTGA Deck Downloader" / "config.json"
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    base = Path(config_home) if config_home else Path.home() / ".config"
+    return base / "mtga-deck-downloader" / "config.json"
+
+
+def resolve_config_path(explicit_path: str | Path | None = None) -> Path:
+    if explicit_path is not None:
+        return Path(explicit_path).expanduser().resolve()
+
+    configured_path = os.environ.get(CONFIG_ENV_VAR)
+    if configured_path:
+        return Path(configured_path).expanduser().resolve()
+
+    user_path = user_config_path()
+    if user_path.exists():
+        return user_path
+
+    if not getattr(sys, "frozen", False) and PROJECT_CONFIG_PATH.exists():
+        return PROJECT_CONFIG_PATH
+
+    return BUNDLED_CONFIG_PATH
 
 
 @dataclass(frozen=True)
@@ -44,7 +84,7 @@ class AppConfig:
 MoxfieldCreator = CreatorConfig
 
 
-def load_config() -> AppConfig:
+def load_config(config_path: str | Path | None = None) -> AppConfig:
     raw_moxfield_creators: list[CreatorConfig] = [
         CreatorConfig(name=name) for name in DEFAULT_MOXFIELD_NAMES
     ]
@@ -53,9 +93,10 @@ def load_config() -> AppConfig:
     ]
     raw_tcgplayer_creators: list[CreatorConfig] = []
 
-    if CONFIG_PATH.exists():
+    resolved_path = resolve_config_path(config_path)
+    if resolved_path.exists():
         try:
-            payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            payload = json.loads(resolved_path.read_text(encoding="utf-8"))
         except Exception:
             payload = {}
         if isinstance(payload, dict):

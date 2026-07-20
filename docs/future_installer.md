@@ -1,6 +1,6 @@
 # Public Installer and Release Plan
 
-Last reviewed: 2026-07-16
+Last reviewed: 2026-07-17
 
 ## Outcome
 
@@ -16,6 +16,24 @@ that do not require Python:
 GitHub Releases will be the initial download and update channel. The first
 public candidate should be `v0.1.0-beta.1`; `v0.1.0` becomes the first general
 release after the clean-machine acceptance tests pass.
+
+## Implementation Status
+
+The lean installer path is implemented:
+
+- Package metadata, installed command, `--version`, and offline `--diagnose`.
+- Installer-safe bundled defaults with optional per-user configuration.
+- Shared PyInstaller one-folder payload with explicit dynamic-provider
+  collection.
+- Windows x64 Inno Setup project and optional PFX signing.
+- Native macOS Terminal launcher, application bundle, DMG builder, and optional
+  Developer ID signing/notarization.
+- GitHub Actions for Windows x64, macOS arm64, macOS x64, draft releases, and
+  SHA-256 checksums.
+
+The arm64 payload and DMG have been built, mounted, and smoke-tested locally.
+Windows and Intel macOS artifacts still need their first GitHub-hosted build.
+Stable public release still requires signing credentials and clean-machine QA.
 
 ## Decisions
 
@@ -41,26 +59,18 @@ release after the clean-machine acceptance tests pass.
 - Do not require administrator privileges. Both installers are per-user or use
   the normal `/Applications` drag-and-drop flow.
 
-## Current Repository Gaps
+## Remaining Release Gaps
 
-These are release blockers, not optional polish:
+These are release blockers rather than installer implementation work:
 
-1. `app.py` modifies `sys.path` instead of using an installed package entry
-   point. Packaging needs a normal `mtga_deck_downloader.__main__` entry point.
-2. Providers are found with `pkgutil` and imported dynamically. PyInstaller
-   cannot reliably infer those imports, so the spec must explicitly collect all
-   `mtga_deck_downloader.providers` submodules.
-3. `config.py` assumes `config.json` lives in a source checkout. Installed
-   applications need immutable bundled defaults and an optional per-user config
-   path.
-4. The missing-dependency help in `ui.py` points at `requirements.txt` and a
-   repository virtual environment. A frozen app must show packaged-app
-   diagnostics instead of pip instructions.
-5. There is no project metadata, version source, package lock, application
-   icon, license, security policy, third-party notice, CI workflow, or release
-   process.
-6. macOS cannot launch this TUI correctly from Finder without a launcher that
-   deliberately opens Terminal.
+1. Run the new workflow once to verify the Windows installer and Intel DMG on
+   GitHub-hosted runners.
+2. Configure Windows and Apple signing credentials before a stable public
+   release.
+3. Complete normal Finder/Terminal and Windows Start Menu clean-machine tests.
+4. Choose and add the repository license, security policy, and third-party
+   notice.
+5. Confirm the generated original application icon and final publisher name.
 
 ## Target Application Contract
 
@@ -342,13 +352,13 @@ Publish `v0.1.0` only when all of the following are true:
 
 ## Estimate and Critical Path
 
-The engineering work is approximately 6-9 focused developer days:
+The lean installer and automation work is approximately 2-4 focused developer
+days:
 
-- Package/runtime refactor and tests: 1-2 days.
-- PyInstaller spec and three payloads: 1-1.5 days.
-- Windows installer and signing: 1 day.
-- macOS launcher, DMGs, signing, and notarization: 1.5-2.5 days.
-- CI, release security, docs, and clean-machine QA: 1.5-2 days.
+- Package/runtime refactor and PyInstaller payload: 0.5-1 day.
+- Windows installer and macOS launcher/DMGs: 0.5-1 day.
+- Optional signing/notarization and GitHub automation: 0.5-1 day.
+- Documentation and clean-machine QA: 0.5-1 day.
 
 Identity verification, certificate issuance, access to clean Intel/Apple Silicon
 test machines, and provider-policy review are external lead-time risks. Start

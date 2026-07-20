@@ -103,6 +103,6 @@ the existing config file. Keep that spelling unless a migration path is added.
 
 ## Packaging
 
-Installer planning lives in `docs/future_installer.md`. Do not add release
-automation piecemeal; keep packaging changes tied to that plan so Windows and
-macOS stay aligned.
+Installer planning lives in `docs/future_installer.md`; executable build and
+release instructions live in `docs/releasing.md`. The PyInstaller payload is
+shared by Windows and macOS so changes must keep both platforms aligned.
