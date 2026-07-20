@@ -10,7 +10,6 @@ from mtga_deck_downloader import config as config_module
 
 class ConfigTests(unittest.TestCase):
     def test_load_config_supports_moxfield_short_names(self) -> None:
-        original_path = config_module.CONFIG_PATH
         with tempfile.TemporaryDirectory() as temp_dir:
             config_path = Path(temp_dir) / "config.json"
             config_path.write_text(
@@ -30,11 +29,7 @@ class ConfigTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            config_module.CONFIG_PATH = config_path
-            try:
-                config = config_module.load_config()
-            finally:
-                config_module.CONFIG_PATH = original_path
+            config = config_module.load_config(config_path)
 
         self.assertEqual(
             [(creator.name, creator.short_name, creator.label) for creator in config.moxfield_creators],
@@ -52,6 +47,17 @@ class ConfigTests(unittest.TestCase):
             [(creator.name, creator.short_name, creator.label) for creator in config.tcgplayer_creators],
             [("Arne Huschenbeth", "Arne", "Arne")],
         )
+
+    def test_explicit_config_path_wins(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            config_path.write_text('{"MoxfieldNames": ["Explicit"]}', encoding="utf-8")
+
+            resolved = config_module.resolve_config_path(config_path)
+            config = config_module.load_config(config_path)
+
+        self.assertEqual(resolved, config_path.resolve())
+        self.assertEqual(config.moxfield_names, ("Explicit",))
 
 
 if __name__ == "__main__":

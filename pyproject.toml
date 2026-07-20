@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mtga-deck-downloader"
+version = "0.1.0"
+description = "Find MTG Arena decklists from multiple public sources."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "beautifulsoup4>=4.12,<5.0",
+  "cloudscraper>=1.2,<2.0",
+  "requests>=2.31,<3.0",
+  "rich>=13.7,<14.0",
+]
+
+[project.optional-dependencies]
+release = [
+  "Pillow>=11,<13",
+  "pyinstaller>=6.14,<7",
+]
+
+[project.scripts]
+mtga-deck-downloader = "mtga_deck_downloader.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/pattont/MTGA-DeckDownloader"
+Issues = "https://github.com/pattont/MTGA-DeckDownloader/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mtga_deck_downloader = ["default_config.json"]
