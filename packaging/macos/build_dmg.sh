@@ -51,12 +51,32 @@ fi
 
 ln -s /Applications "$BUILD_DIR/dmg/Applications"
 rm -f "$DMG_PATH"
-hdiutil create \
-  -volname "MTGA Deck Downloader" \
-  -srcfolder "$BUILD_DIR/dmg" \
-  -ov \
-  -format UDZO \
-  "$DMG_PATH"
+
+MAX_DMG_ATTEMPTS=3
+for ((attempt = 1; attempt <= MAX_DMG_ATTEMPTS; attempt++)); do
+  attempt_path="${DMG_PATH%.dmg}.attempt-$attempt.dmg"
+  rm -f "$attempt_path"
+
+  if hdiutil create \
+    -volname "MTGA Deck Downloader" \
+    -srcfolder "$BUILD_DIR/dmg" \
+    -ov \
+    -format UDZO \
+    "$attempt_path"; then
+    mv "$attempt_path" "$DMG_PATH"
+    break
+  fi
+
+  rm -f "$attempt_path"
+  if ((attempt == MAX_DMG_ATTEMPTS)); then
+    echo "DMG creation failed after $MAX_DMG_ATTEMPTS attempts." >&2
+    exit 1
+  fi
+
+  retry_delay=$((attempt * 5))
+  echo "DMG creation attempt $attempt failed; retrying in $retry_delay seconds." >&2
+  sleep "$retry_delay"
+done
 
 if [[ -n "${MACOS_SIGNING_IDENTITY:-}" ]]; then
   codesign --force --timestamp --sign "$MACOS_SIGNING_IDENTITY" "$DMG_PATH"

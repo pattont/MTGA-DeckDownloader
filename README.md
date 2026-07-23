@@ -86,6 +86,15 @@ and release instructions are in
 Published downloads will be available from the
 [GitHub Releases page](https://github.com/pattont/MTGA-DeckDownloader/releases).
 
+Current installers are unsigned. Windows SmartScreen may show an unknown
+publisher warning. On macOS, Gatekeeper may initially block the application.
+After trying to open it, confirm that the download came from this repository,
+then use **System Settings > Privacy & Security > Open Anyway**. Apple documents
+this process in
+[Open a Mac app from an unknown developer](https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac).
+Every installer artifact and GitHub Release includes SHA-256 checksums for
+download verification.
+
 ## Config
 
 The repo root contains `config.json`. Creator profiles are configured here:
