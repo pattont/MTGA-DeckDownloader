@@ -33,8 +33,36 @@ Inno Setup 6 must be installed for a local Windows build.
 
 Open the `Build installers` workflow in GitHub Actions, choose `Run workflow`,
 and enter the version currently declared in `pyproject.toml`. The workflow
-uploads all three installers as workflow artifacts. No signing secrets are
+uploads all three installers as workflow artifacts. Each artifact contains its
+installer and a `SHA256SUMS-<platform>.txt` file. No signing secrets are
 required.
+
+Unsigned installers are the current public-release default:
+
+- Windows may display a SmartScreen unknown-publisher warning.
+- macOS Gatekeeper may initially block the application because Apple cannot
+  verify its developer.
+- After trying to open the macOS application, users who have verified the
+  download can use **System Settings > Privacy & Security > Open Anyway**.
+  Apple's current instructions are at
+  <https://support.apple.com/guide/mac-help/open-a-mac-app-from-an-unknown-developer-mh40616/mac>.
+
+Keep this limitation prominent in release notes. Open source availability does
+not cause Gatekeeper to trust an unsigned binary.
+
+To verify a macOS download, place the DMG beside its platform checksum file and
+run:
+
+```bash
+shasum -a 256 -c SHA256SUMS-macos-arm64.txt
+```
+
+On Windows, compare the displayed hash with
+`SHA256SUMS-windows-x64.txt`:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\MTGA-Deck-Downloader-*-setup.exe
+```
 
 ## Optional Windows Signing
 
@@ -73,5 +101,6 @@ git push origin v0.1.0
 ```
 
 The workflow validates that the tag and project version match. After all three
-jobs succeed, it creates a draft GitHub Release containing the installers and
-`SHA256SUMS.txt`. Inspect the draft and test the downloads before publishing it.
+jobs succeed, it creates a draft GitHub Release containing the installers and a
+canonical `SHA256SUMS.txt`. The draft release is marked as unsigned. Inspect the
+draft, verify the checksums, and test the downloads before publishing it.

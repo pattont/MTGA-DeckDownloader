@@ -96,11 +96,24 @@ jobs:
         shell: pwsh
         run: ./packaging/windows/sign.ps1 -Path "dist/release/*.exe"
 
-      - name: Upload Windows installer
+      - name: Generate Windows checksum
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem "dist/release" -Filter "*.exe")
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one Windows installer, found $($installers.Count)"
+          }
+          $hash = (Get-FileHash -Algorithm SHA256 $installers[0].FullName).Hash.ToLowerInvariant()
+          "$hash  $($installers[0].Name)" |
+            Set-Content -Encoding ascii "dist/release/SHA256SUMS-windows-x64.txt"
+
+      - name: Upload Windows installer and checksum
         uses: actions/upload-artifact@v4
         with:
           name: installer-windows-x64
-          path: dist/release/*.exe
+          path: |
+            dist/release/*.exe
+            dist/release/SHA256SUMS-windows-x64.txt
           if-no-files-found: error
 
   macos:
@@ -192,11 +205,26 @@ jobs:
           xcrun stapler staple "$dmg"
           xcrun stapler validate "$dmg"
 
-      - name: Upload macOS DMG
+      - name: Generate macOS checksum
+        shell: bash
+        run: |
+          dmg="$(find dist/release -maxdepth 1 -name '*.dmg' -print -quit)"
+          [[ -n "$dmg" ]] || {
+            echo "No DMG found for checksum generation." >&2
+            exit 1
+          }
+          (
+            cd dist/release
+            shasum -a 256 "$(basename "$dmg")" > "SHA256SUMS-macos-${{ matrix.arch }}.txt"
+          )
+
+      - name: Upload macOS DMG and checksum
         uses: actions/upload-artifact@v4
         with:
           name: installer-macos-${{ matrix.arch }}
-          path: dist/release/*.dmg
+          path: |
+            dist/release/*.dmg
+            dist/release/SHA256SUMS-macos-${{ matrix.arch }}.txt
           if-no-files-found: error
 
       - name: Delete temporary signing keychain
@@ -227,7 +255,8 @@ jobs:
       - name: Generate SHA-256 checksums
         run: |
           cd release-assets
-          sha256sum * > SHA256SUMS.txt
+          rm -f SHA256SUMS-*.txt
+          sha256sum *.exe *.dmg > SHA256SUMS.txt
 
       - name: Create or update draft release
         env:
@@ -239,6 +268,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" \
               --draft \
               --generate-notes \
+              --notes "These installers are currently unsigned. Windows SmartScreen and macOS Gatekeeper may show a warning. See the repository README for verification and launch instructions." \
               --title "MTGA Deck Downloader $GITHUB_REF_NAME"
           fi
           gh release upload "$GITHUB_REF_NAME" release-assets/* \
