@@ -104,8 +104,12 @@ jobs:
             throw "Expected exactly one Windows installer, found $($installers.Count)"
           }
           $hash = (Get-FileHash -Algorithm SHA256 $installers[0].FullName).Hash.ToLowerInvariant()
-          "$hash  $($installers[0].Name)" |
-            Set-Content -Encoding ascii "dist/release/SHA256SUMS-windows-x64.txt"
+          $checksum = "$hash  $($installers[0].Name)`n"
+          [IO.File]::WriteAllText(
+            "dist/release/SHA256SUMS-windows-x64.txt",
+            $checksum,
+            [Text.Encoding]::ASCII
+          )
 
       - name: Upload Windows installer and checksum
         uses: actions/upload-artifact@v4
