@@ -166,6 +166,21 @@ PyInstaller build. Do not assume the process working directory is the repository
 root. If adding package data, update `pyproject.toml` and the PyInstaller payload
 as needed.
 
+The `Build installers` GitHub Actions workflow produces three self-contained
+artifacts: Windows x64, macOS Apple Silicon, and macOS Intel. Unsigned installers
+are the supported default and must build without signing secrets. Signing and
+notarization remain optional, secret-gated enhancements.
+
+Preserve these release behaviors:
+
+- Manual workflow runs upload each installer with a portable SHA-256 manifest.
+- A matching `v*` tag creates a draft release only after every platform passes.
+- Draft releases clearly disclose that installers are unsigned.
+- macOS DMG creation retries transient `hdiutil` failures without hiding a
+  persistent failure.
+- Installer filenames, checksum entries, `pyproject.toml`, and the requested
+  release version remain consistent.
+
 Update user documentation when behavior changes:
 
 - `README.md`: sources, configuration, controls, and known limitations.
@@ -185,6 +200,8 @@ Before handing off a change:
 3. Run `.venv/bin/python -m unittest discover`.
 4. Run `.venv/bin/mtga-deck-downloader --diagnose` for provider, config, CLI,
    package-data, or packaging changes.
-5. Run `git diff --check`.
-6. Report any test, live-source, platform, or packaging verification that could
+5. For packaging changes, validate applicable shell/workflow syntax and build
+   the local platform artifact when practical.
+6. Run `git diff --check`.
+7. Report any test, live-source, platform, or packaging verification that could
    not be performed.
